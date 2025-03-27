@@ -6,4 +6,5 @@ export type ObjectInfo = {
   id: number;
   startPoint: Point;
   currentPoint: Point;
+  color: string;
 };

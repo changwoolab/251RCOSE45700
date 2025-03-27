@@ -1,21 +1,33 @@
 'use client';
 
+import { ObjectDetails } from "@/components/ObjectDetails";
 import { Sidebar } from "@/components/Sidebar";
-import { Mode } from "@/types/objects";
-import { ChakraProvider, defaultSystem, Text } from "@chakra-ui/react";
+import { Mode, ObjectInfo } from "@/types/objects";
+import { Box, ChakraProvider, defaultSystem, Flex, Text } from "@chakra-ui/react";
 import Image from "next/image";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export default function Home() {
   const [mode, setMode] = useState<Mode>("line")
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [infoObject, setInfoObject] = useState<{
-    id: number;
-    startPoint: { x: number; y: number };
-    currentPoint: { x: number; y: number };
-  } |
-  null>(null);
+  const [objectInfo, setObjectInfo] = useState<ObjectInfo | null>(null);
   const idRef = useRef<number>(0);
+
+  // Function to update canvas size to match parent's dimensions.
+  const updateCanvasSize = () => {
+    const canvas = canvasRef.current;
+    if (canvas && canvas.parentElement) {
+      // Use parent's client width/height or window dimensions for full screen.
+      canvas.width = canvas.parentElement.clientWidth;
+      canvas.height = canvas.parentElement.clientHeight;
+    }
+  };
+
+  useEffect(() => {
+    updateCanvasSize();
+    window.addEventListener("resize", updateCanvasSize);
+    return () => window.removeEventListener("resize", updateCanvasSize);
+  }, []);
 
   const clear = () => {
     const canvas = canvasRef.current;
@@ -33,10 +45,11 @@ export default function Home() {
     const startY = e.clientY - rect.top;
   
     // Save starting information for the shape being drawn.
-    setInfoObject({
+    setObjectInfo({
       id: idRef.current++,
       startPoint: { x: startX, y: startY },
       currentPoint: { x: startX, y: startY },
+      color: "black",
     });
   
     const ctx = canvas.getContext("2d");
@@ -64,7 +77,7 @@ export default function Home() {
         ctx.stroke();
   
         // Update currentPoint in case you want to use it later.
-        setInfoObject((prev: any)=> ({
+        setObjectInfo((prev: any)=> ({
           ...prev,
           currentPoint: { x: currentX, y: currentY },
         }));
@@ -90,7 +103,7 @@ export default function Home() {
         ctx.rect(startX, startY, width, height);
         ctx.stroke();
   
-        setInfoObject((prev: any) => ({
+        setObjectInfo((prev: any) => ({
           ...prev,
           currentPoint: { x: currentX, y: currentY },
         }));
@@ -114,7 +127,7 @@ export default function Home() {
         ctx.arc(startX, startY, radius, 0, 2 * Math.PI);
         ctx.stroke();
   
-        setInfoObject((prev: any) => ({
+        setObjectInfo((prev: any) => ({
           ...prev,
           currentPoint: { x: currentX, y: currentY },
         }));
@@ -139,28 +152,20 @@ export default function Home() {
   
   return (
     <ChakraProvider value={defaultSystem}>
-      <div className="bg-[#2b2b2b] flex h-screen">
-        <div className="flex flex-col">
+      <Flex bgColor={"gray.700"} flex={1} width={"100vw"} height={"100vh"}>
+        <Box borderRadius={10}>
           <Sidebar setMode={setMode} clear={clear} />
           <Text>{mode}</Text>
-        </div>
-        <div>
+        </Box>
+        <Box width={"100%"} height={"100%"}>
           <canvas
             ref={canvasRef}
             onMouseDown={onMouseDown}
-            width={850}
-            height={650}
-            className="bg-white border border-black rounded-md"
+            style={{ backgroundColor: "white" }}
           />
-        </div>
-        {/* <ObjectDetails
-          mode={mode}
-          startPoint={infoObject?.startPoint}
-          endPoint={infoObject?.currentPoint}
-          zOrder={infoObject?.id}
-          color={infoObject?.fillColor}
-        /> */}
-      </div>
+        </Box>
+        <ObjectDetails objectInfo={objectInfo} />
+      </Flex>
     </ChakraProvider>
   );
 }
