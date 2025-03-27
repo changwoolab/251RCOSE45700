@@ -2,7 +2,17 @@ import { ObjectInfo } from "@/types/objects";
 import { Nullable, NullableProperty } from "@/types/typeUtils";
 import { Box, Text } from "@chakra-ui/react";
 
-export function ObjectDetails({objectInfo}: {objectInfo: Nullable<ObjectInfo>}) {
+export function ObjectDetails({objects}: {objects: ObjectInfo[]}) {
+  return (
+    <Box minW={300}>
+      {objects.map((object) => (
+        <ObjectDetail objectInfo={object} />
+      ))}
+    </Box>
+  );
+}
+
+function ObjectDetail({objectInfo}: {objectInfo: NullableProperty<ObjectInfo>}) {
   const { id, startPoint, currentPoint, color } = objectInfo ?? {};
 
   return (

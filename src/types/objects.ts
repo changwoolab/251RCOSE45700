@@ -1,5 +1,5 @@
-export type Object = "line" | "rectangle" | "circle";
-export type Mode = Object | "select";
+export type Shape = "line" | "rectangle" | "circle";
+export type Mode = Shape | "select";
 
 export type Point = { x: number; y: number };
 export type ObjectInfo = {
@@ -7,4 +7,5 @@ export type ObjectInfo = {
   startPoint: Point;
   currentPoint: Point;
   color: string;
+  type: Shape;
 };
