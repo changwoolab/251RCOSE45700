@@ -13,7 +13,7 @@ export default function Home() {
   const [objects, setObjects] = useState<ObjectInfo[]>([]);
   // Store IDs of selected objects.
   const [selectedObjectIds, setSelectedObjectIds] = useState<number[]>([]);
-  const idRef = useRef<number>(0);
+  const idRef = useRef<number>(1);
 
   // Update canvas size to match parent's dimensions.
   const updateCanvasSize = () => {
@@ -25,14 +25,15 @@ export default function Home() {
     }
   };
 
-  // Redraw all objects.
+  // Redraw all objects (sorted by z-index).
   const redrawObjects = () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    objects.forEach((obj) => {
+    const sortedObjects = [...objects].sort((a, b) => a.zIndex - b.zIndex);
+    sortedObjects.forEach((obj) => {
       ctx.strokeStyle = obj.color;
       if (obj.type === "line") {
         ctx.beginPath();
@@ -44,6 +45,8 @@ export default function Home() {
         const height = obj.currentPoint.y - obj.startPoint.y;
         ctx.beginPath();
         ctx.rect(obj.startPoint.x, obj.startPoint.y, width, height);
+        ctx.fillStyle = obj.fillColor;
+        ctx.fill();
         ctx.stroke();
       } else if (obj.type === "circle") {
         const radius = Math.sqrt(
@@ -52,6 +55,8 @@ export default function Home() {
         );
         ctx.beginPath();
         ctx.arc(obj.startPoint.x, obj.startPoint.y, radius, 0, 2 * Math.PI);
+        ctx.fillStyle = obj.fillColor;
+        ctx.fill();
         ctx.stroke();
       }
     });
@@ -72,6 +77,11 @@ export default function Home() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
   };
 
+  // Update a single object (from ObjectDetails changes).
+  const updateObject = (updated: ObjectInfo) => {
+    setObjects((prev) => prev.map(obj => obj.id === updated.id ? updated : obj));
+  };
+
   // --- Hit-testing helpers ---
   const isPointNearLine = (p: { x: number; y: number }, line: ObjectInfo) => {
     const { startPoint, currentPoint } = line;
@@ -82,7 +92,7 @@ export default function Home() {
         currentPoint.x * startPoint.y -
         currentPoint.y * startPoint.x
       ) / Math.hypot(currentPoint.y - startPoint.y, currentPoint.x - startPoint.x);
-    return distance < 5; // threshold (adjust as needed)
+    return distance < 5;
   };
 
   const isPointInRect = (p: { x: number; y: number }, rectObj: ObjectInfo) => {
@@ -121,18 +131,20 @@ export default function Home() {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    // Save current canvas state for drawing previews.
+    // Save current canvas state for previews.
     const savedImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
     let onMouseMove: (e: MouseEvent) => void;
     let onMouseUp: (e: MouseEvent) => void;
 
     if (mode === "line" || mode === "rectangle" || mode === "circle") {
-      // Create a new object to be drawn.
+      // Create a new object with default fill and z-index.
       const newObj: ObjectInfo = {
         id: idRef.current++,
         startPoint: { x: startX, y: startY },
         currentPoint: { x: startX, y: startY },
         color: "black",
+        fillColor: "transparent",
+        zIndex: idRef.current,
         type: mode,
       };
 
@@ -141,7 +153,6 @@ export default function Home() {
         const currentY = e.clientY - rect.top;
         ctx.putImageData(savedImageData, 0, 0);
         ctx.strokeStyle = newObj.color;
-
         if (mode === "line") {
           ctx.beginPath();
           ctx.moveTo(newObj.startPoint.x, newObj.startPoint.y);
@@ -152,6 +163,8 @@ export default function Home() {
           const height = currentY - newObj.startPoint.y;
           ctx.beginPath();
           ctx.rect(newObj.startPoint.x, newObj.startPoint.y, width, height);
+          ctx.fillStyle = newObj.fillColor;
+          ctx.fill();
           ctx.stroke();
         } else if (mode === "circle") {
           const radius = Math.sqrt(
@@ -160,6 +173,8 @@ export default function Home() {
           );
           ctx.beginPath();
           ctx.arc(newObj.startPoint.x, newObj.startPoint.y, radius, 0, 2 * Math.PI);
+          ctx.fillStyle = newObj.fillColor;
+          ctx.fill();
           ctx.stroke();
         }
       };
@@ -173,7 +188,7 @@ export default function Home() {
         canvas.removeEventListener("mouseup", onMouseUp);
       };
 
-    }  else if (mode === "select") {
+    } else if (mode === "select") {
       // In select mode, perform hit testing.
       const clickedPoint = { x: startX, y: startY };
       let hitIds: number[] = [];
@@ -182,19 +197,18 @@ export default function Home() {
           hitIds.push(obj.id);
         }
       });
-      // If no object was hit (background click), clear selection and exit.
+      // If the background is clicked, clear the selection.
       if (hitIds.length === 0) {
         setSelectedObjectIds([]);
         return;
       }
-      
       // Build the intended selection (shift‑click adds to existing selection).
       const intendedSelection = e.shiftKey
         ? Array.from(new Set([...selectedObjectIds, ...hitIds]))
         : hitIds;
       setSelectedObjectIds(intendedSelection);
-    
-      // Record original positions for the selected objects.
+
+      // Record the original positions of selected objects.
       const originalPositions = objects
         .filter((obj) => intendedSelection.includes(obj.id))
         .map((obj) => ({
@@ -204,13 +218,12 @@ export default function Home() {
         }));
       const moveStartX = startX;
       const moveStartY = startY;
-    
+
       onMouseMove = (e: MouseEvent) => {
         const currentX = e.clientX - rect.left;
         const currentY = e.clientY - rect.top;
         const deltaX = currentX - moveStartX;
         const deltaY = currentY - moveStartY;
-        // Compute new positions for all selected objects.
         const movedObjects = objects.map((obj) => {
           if (intendedSelection.includes(obj.id)) {
             const original = originalPositions.find((o) => o.id === obj.id);
@@ -230,10 +243,11 @@ export default function Home() {
           }
           return obj;
         });
-        // Update state in real time so that ObjectDetails reflects the new positions.
+        // Update state so that ObjectDetails shows the new positions.
         setObjects(movedObjects);
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-        movedObjects.forEach((obj) => {
+        const sortedMoved = [...movedObjects].sort((a, b) => a.zIndex - b.zIndex);
+        sortedMoved.forEach((obj) => {
           ctx.strokeStyle = obj.color;
           if (obj.type === "line") {
             ctx.beginPath();
@@ -245,6 +259,8 @@ export default function Home() {
             const height = obj.currentPoint.y - obj.startPoint.y;
             ctx.beginPath();
             ctx.rect(obj.startPoint.x, obj.startPoint.y, width, height);
+            ctx.fillStyle = obj.fillColor;
+            ctx.fill();
             ctx.stroke();
           } else if (obj.type === "circle") {
             const radius = Math.sqrt(
@@ -253,11 +269,13 @@ export default function Home() {
             );
             ctx.beginPath();
             ctx.arc(obj.startPoint.x, obj.startPoint.y, radius, 0, 2 * Math.PI);
+            ctx.fillStyle = obj.fillColor;
+            ctx.fill();
             ctx.stroke();
           }
         });
       };
-    
+
       onMouseUp = (e: MouseEvent) => {
         const currentX = e.clientX - rect.left;
         const currentY = e.clientY - rect.top;
@@ -286,15 +304,14 @@ export default function Home() {
         redrawObjects();
         canvas.removeEventListener("mousemove", onMouseMove);
         canvas.removeEventListener("mouseup", onMouseUp);
-      }
-     } else {
+      };
+    } else {
       return;
     }
     canvas.addEventListener("mousemove", onMouseMove);
     canvas.addEventListener("mouseup", onMouseUp);
   };
 
-  // Redraw when objects update.
   useEffect(() => {
     redrawObjects();
   }, [objects]);
@@ -313,9 +330,10 @@ export default function Home() {
             style={{ backgroundColor: "white" }}
           />
         </Box>
-        {/* Pass selected objects for property changes (e.g. re-coloring) */}
+        {/* Pass selected objects along with the update callback */}
         <ObjectDetails
           objects={objects.filter((obj) => selectedObjectIds.includes(obj.id))}
+          onUpdate={updateObject}
         />
       </Flex>
     </ChakraProvider>
