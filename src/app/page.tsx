@@ -4,7 +4,7 @@ import { ObjectDetails } from "@/components/ObjectDetails";
 import { Sidebar } from "@/components/Sidebar";
 import { Mode, ObjectInfo } from "@/types/objects";
 import { Box, ChakraProvider, defaultSystem, Flex, Text } from "@chakra-ui/react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 export default function Home() {
   const [mode, setMode] = useState<Mode>("line");
@@ -15,18 +15,8 @@ export default function Home() {
   const [selectedObjectIds, setSelectedObjectIds] = useState<number[]>([]);
   const idRef = useRef<number>(1);
 
-  // Update canvas size to match parent's dimensions.
-  const updateCanvasSize = () => {
-    const canvas = canvasRef.current;
-    if (canvas && canvas.parentElement) {
-      canvas.width = canvas.parentElement.clientWidth;
-      canvas.height = canvas.parentElement.clientHeight;
-      redrawObjects();
-    }
-  };
-
   // Redraw all objects (sorted by z-index).
-  const redrawObjects = () => {
+  const redrawObjects = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
@@ -51,7 +41,7 @@ export default function Home() {
       } else if (obj.type === "circle") {
         const radius = Math.sqrt(
           Math.pow(obj.currentPoint.x - obj.startPoint.x, 2) +
-          Math.pow(obj.currentPoint.y - obj.startPoint.y, 2)
+            Math.pow(obj.currentPoint.y - obj.startPoint.y, 2)
         );
         ctx.beginPath();
         ctx.arc(obj.startPoint.x, obj.startPoint.y, radius, 0, 2 * Math.PI);
@@ -60,13 +50,23 @@ export default function Home() {
         ctx.stroke();
       }
     });
-  };
+  }, [objects]);
+
+  // Update canvas size to match parent's dimensions.
+  const updateCanvasSize = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (canvas && canvas.parentElement) {
+      canvas.width = canvas.parentElement.clientWidth;
+      canvas.height = canvas.parentElement.clientHeight;
+      redrawObjects();
+    }
+  }, [redrawObjects]);
 
   useEffect(() => {
     updateCanvasSize();
     window.addEventListener("resize", updateCanvasSize);
     return () => window.removeEventListener("resize", updateCanvasSize);
-  }, [objects]);
+  }, [objects, updateCanvasSize]);
 
   const clear = () => {
     setObjects([]);
@@ -79,7 +79,9 @@ export default function Home() {
 
   // Update a single object (from ObjectDetails changes).
   const updateObject = (updated: ObjectInfo) => {
-    setObjects((prev) => prev.map(obj => obj.id === updated.id ? updated : obj));
+    setObjects((prev) =>
+      prev.map((obj) => (obj.id === updated.id ? updated : obj))
+    );
   };
 
   // --- Hit-testing helpers ---
@@ -88,10 +90,11 @@ export default function Home() {
     const distance =
       Math.abs(
         (currentPoint.y - startPoint.y) * p.x -
-        (currentPoint.x - startPoint.x) * p.y +
-        currentPoint.x * startPoint.y -
-        currentPoint.y * startPoint.x
-      ) / Math.hypot(currentPoint.y - startPoint.y, currentPoint.x - startPoint.x);
+          (currentPoint.x - startPoint.x) * p.y +
+          currentPoint.x * startPoint.y -
+          currentPoint.y * startPoint.x
+      ) /
+      Math.hypot(currentPoint.y - startPoint.y, currentPoint.x - startPoint.x);
     return distance < 5;
   };
 
@@ -108,7 +111,7 @@ export default function Home() {
     const { startPoint, currentPoint } = circle;
     const radius = Math.sqrt(
       Math.pow(currentPoint.x - startPoint.x, 2) +
-      Math.pow(currentPoint.y - startPoint.y, 2)
+        Math.pow(currentPoint.y - startPoint.y, 2)
     );
     const dist = Math.hypot(p.x - startPoint.x, p.y - startPoint.y);
     return dist <= radius;
@@ -169,10 +172,16 @@ export default function Home() {
         } else if (mode === "circle") {
           const radius = Math.sqrt(
             Math.pow(currentX - newObj.startPoint.x, 2) +
-            Math.pow(currentY - newObj.startPoint.y, 2)
+              Math.pow(currentY - newObj.startPoint.y, 2)
           );
           ctx.beginPath();
-          ctx.arc(newObj.startPoint.x, newObj.startPoint.y, radius, 0, 2 * Math.PI);
+          ctx.arc(
+            newObj.startPoint.x,
+            newObj.startPoint.y,
+            radius,
+            0,
+            2 * Math.PI
+          );
           ctx.fillStyle = newObj.fillColor;
           ctx.fill();
           ctx.stroke();
@@ -187,11 +196,10 @@ export default function Home() {
         canvas.removeEventListener("mousemove", onMouseMove);
         canvas.removeEventListener("mouseup", onMouseUp);
       };
-
     } else if (mode === "select") {
       // In select mode, perform hit testing.
       const clickedPoint = { x: startX, y: startY };
-      let hitIds: number[] = [];
+      const hitIds: number[] = [];
       objects.forEach((obj) => {
         if (hitTest(clickedPoint, obj)) {
           hitIds.push(obj.id);
@@ -246,7 +254,9 @@ export default function Home() {
         // Update state so that ObjectDetails shows the new positions.
         setObjects(movedObjects);
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-        const sortedMoved = [...movedObjects].sort((a, b) => a.zIndex - b.zIndex);
+        const sortedMoved = [...movedObjects].sort(
+          (a, b) => a.zIndex - b.zIndex
+        );
         sortedMoved.forEach((obj) => {
           ctx.strokeStyle = obj.color;
           if (obj.type === "line") {
@@ -265,7 +275,7 @@ export default function Home() {
           } else if (obj.type === "circle") {
             const radius = Math.sqrt(
               Math.pow(obj.currentPoint.x - obj.startPoint.x, 2) +
-              Math.pow(obj.currentPoint.y - obj.startPoint.y, 2)
+                Math.pow(obj.currentPoint.y - obj.startPoint.y, 2)
             );
             ctx.beginPath();
             ctx.arc(obj.startPoint.x, obj.startPoint.y, radius, 0, 2 * Math.PI);
@@ -314,7 +324,7 @@ export default function Home() {
 
   useEffect(() => {
     redrawObjects();
-  }, [objects]);
+  }, [objects, redrawObjects]);
 
   return (
     <ChakraProvider value={defaultSystem}>

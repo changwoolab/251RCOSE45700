@@ -1,5 +1,5 @@
 import type { Mode } from "@/types/objects";
-import { Box, Button, ButtonGroup, Flex, Spacer } from "@chakra-ui/react"
+import { Button, Flex, Spacer } from "@chakra-ui/react";
 
 interface SidebarProps {
   setMode: React.Dispatch<React.SetStateAction<Mode>>;
