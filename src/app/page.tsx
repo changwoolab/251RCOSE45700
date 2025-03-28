@@ -15,7 +15,7 @@ export default function Home() {
   const [selectedObjectIds, setSelectedObjectIds] = useState<number[]>([]);
   const idRef = useRef<number>(1);
 
-  // Redraw all objects (sorted by z-index).
+  // Redraw all objects (sorted by z-index)
   const redrawObjects = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
