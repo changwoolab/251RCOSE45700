@@ -2,9 +2,13 @@ import { ObjectInfo } from "@/types/objects";
 import { Box, Text } from "@chakra-ui/react";
 import React from "react";
 
-export function ObjectDetails({ objects, onUpdate }) {
+export function ObjectDetails({ objects, onUpdate }: { objects: ObjectInfo[]; onUpdate: (updated: ObjectInfo) => void; }) {
   if (!objects || objects.length === 0) {
-    return <Box minW={300} p={2} bg="gray.700">No objects available.</Box>;
+    return (
+      <Box minW={300} p={2} bg="gray.700">
+        No objects available.
+      </Box>
+    );
   }
 
   // 선택된 객체들 중 z-index가 가장 높은 객체만 보여줌.
@@ -123,13 +127,35 @@ function ObjectDetail({ objectInfo, onUpdate }: { objectInfo: ObjectInfo; onUpda
         Current Point: ({currentPoint.x}, {currentPoint.y})
       </Text>
       <Text>
-        Stroke Color: <input type="color" value={color} onChange={(e) => onUpdate({ ...objectInfo, color: e.target.value })} />
+        Stroke Color:{" "}
+        <input
+          type="color"
+          value={color}
+          onChange={(e) => onUpdate({ ...objectInfo, color: e.target.value })}
+        />
       </Text>
       <Text>
-        Fill Color: <input type="color" value={fillColor} onChange={(e) => onUpdate({ ...objectInfo, fillColor: e.target.value })} />
+        Fill Color:{" "}
+        <input
+          type="color"
+          value={fillColor}
+          onChange={(e) =>
+            onUpdate({ ...objectInfo, fillColor: e.target.value })
+          }
+        />
       </Text>
       <Text>
-        Z-Index: <input type="number" value={zIndex} onChange={(e) => onUpdate({ ...objectInfo, zIndex: parseInt(e.target.value, 10) || 0 })} />
+        Z-Index:{" "}
+        <input
+          type="number"
+          value={zIndex}
+          onChange={(e) =>
+            onUpdate({
+              ...objectInfo,
+              zIndex: parseInt(e.target.value, 10) || 0,
+            })
+          }
+        />
       </Text>
       {sizeFields}
     </Box>
