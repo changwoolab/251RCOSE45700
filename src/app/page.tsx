@@ -175,13 +175,7 @@ export default function Home() {
               Math.pow(currentY - newObj.startPoint.y, 2)
           );
           ctx.beginPath();
-          ctx.arc(
-            newObj.startPoint.x,
-            newObj.startPoint.y,
-            radius,
-            0,
-            2 * Math.PI
-          );
+          ctx.arc(newObj.startPoint.x, newObj.startPoint.y, radius, 0, 2 * Math.PI);
           ctx.fillStyle = newObj.fillColor;
           ctx.fill();
           ctx.stroke();
@@ -199,21 +193,18 @@ export default function Home() {
     } else if (mode === "select") {
       // In select mode, perform hit testing.
       const clickedPoint = { x: startX, y: startY };
-      const hitIds: number[] = [];
-      objects.forEach((obj) => {
-        if (hitTest(clickedPoint, obj)) {
-          hitIds.push(obj.id);
-        }
-      });
-      // If the background is clicked, clear the selection.
-      if (hitIds.length === 0) {
+      // 필터링하여 hit된 객체들을 가져온 후 z-index가 가장 높은 객체만 선택함.
+      const hitObjects = objects.filter((obj) => hitTest(clickedPoint, obj));
+      if (hitObjects.length === 0) {
         setSelectedObjectIds([]);
         return;
       }
-      // Build the intended selection (shift‑click adds to existing selection).
+      const topObject = hitObjects.reduce((prev, curr) =>
+        prev.zIndex > curr.zIndex ? prev : curr
+      );
       const intendedSelection = e.shiftKey
-        ? Array.from(new Set([...selectedObjectIds, ...hitIds]))
-        : hitIds;
+        ? Array.from(new Set([...selectedObjectIds, topObject.id]))
+        : [topObject.id];
       setSelectedObjectIds(intendedSelection);
 
       // Record the original positions of selected objects.
