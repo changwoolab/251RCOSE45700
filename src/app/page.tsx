@@ -5,6 +5,7 @@ import { Sidebar } from "@/components/Sidebar";
 import { Mode, ObjectInfo } from "@/types/objects";
 import { Box, ChakraProvider, defaultSystem, Flex, Text } from "@chakra-ui/react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { ShapeDrawerFactory } from "@/shapes/ShapeDrawer";
 
 export default function Home() {
   const [mode, setMode] = useState<Mode>("line");
@@ -21,34 +22,17 @@ export default function Home() {
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
+    
+    // 캔버스 초기화
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    // z-index 순서대로 정렬하여 그리기
     const sortedObjects = [...objects].sort((a, b) => a.zIndex - b.zIndex);
+    
     sortedObjects.forEach((obj) => {
-      ctx.strokeStyle = obj.color;
-      if (obj.type === "line") {
-        ctx.beginPath();
-        ctx.moveTo(obj.startPoint.x, obj.startPoint.y);
-        ctx.lineTo(obj.currentPoint.x, obj.currentPoint.y);
-        ctx.stroke();
-      } else if (obj.type === "rectangle") {
-        const width = obj.currentPoint.x - obj.startPoint.x;
-        const height = obj.currentPoint.y - obj.startPoint.y;
-        ctx.beginPath();
-        ctx.rect(obj.startPoint.x, obj.startPoint.y, width, height);
-        ctx.fillStyle = obj.fillColor;
-        ctx.fill();
-        ctx.stroke();
-      } else if (obj.type === "circle") {
-        const radius = Math.sqrt(
-          Math.pow(obj.currentPoint.x - obj.startPoint.x, 2) +
-            Math.pow(obj.currentPoint.y - obj.startPoint.y, 2)
-        );
-        ctx.beginPath();
-        ctx.arc(obj.startPoint.x, obj.startPoint.y, radius, 0, 2 * Math.PI);
-        ctx.fillStyle = obj.fillColor;
-        ctx.fill();
-        ctx.stroke();
-      }
+        ctx.strokeStyle = obj.color;
+        const drawer = ShapeDrawerFactory.getDrawer(obj.type);
+        drawer.draw(ctx, obj);
     });
   }, [objects]);
 
@@ -250,30 +234,8 @@ export default function Home() {
         );
         sortedMoved.forEach((obj) => {
           ctx.strokeStyle = obj.color;
-          if (obj.type === "line") {
-            ctx.beginPath();
-            ctx.moveTo(obj.startPoint.x, obj.startPoint.y);
-            ctx.lineTo(obj.currentPoint.x, obj.currentPoint.y);
-            ctx.stroke();
-          } else if (obj.type === "rectangle") {
-            const width = obj.currentPoint.x - obj.startPoint.x;
-            const height = obj.currentPoint.y - obj.startPoint.y;
-            ctx.beginPath();
-            ctx.rect(obj.startPoint.x, obj.startPoint.y, width, height);
-            ctx.fillStyle = obj.fillColor;
-            ctx.fill();
-            ctx.stroke();
-          } else if (obj.type === "circle") {
-            const radius = Math.sqrt(
-              Math.pow(obj.currentPoint.x - obj.startPoint.x, 2) +
-                Math.pow(obj.currentPoint.y - obj.startPoint.y, 2)
-            );
-            ctx.beginPath();
-            ctx.arc(obj.startPoint.x, obj.startPoint.y, radius, 0, 2 * Math.PI);
-            ctx.fillStyle = obj.fillColor;
-            ctx.fill();
-            ctx.stroke();
-          }
+          const drawer = ShapeDrawerFactory.getDrawer(obj.type);
+          drawer.draw(ctx, obj);
         });
       };
 
