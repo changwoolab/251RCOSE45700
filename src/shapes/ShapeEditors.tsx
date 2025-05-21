@@ -3,7 +3,7 @@ import { Text } from "@chakra-ui/react";
 import React from "react";
 
 // Shape Editor Strategy Interface
-export interface ShapeEditorStrategy {
+export interface ShapeEditor {
   renderSizeFields: (
     objectInfo: ObjectInfo, 
     onUpdate: (updated: ObjectInfo) => void
@@ -11,15 +11,15 @@ export interface ShapeEditorStrategy {
 }
 
 // Shape Editor Registry - stores all available shape editors
-const shapeEditorRegistry: Record<Shape, ShapeEditorStrategy> = {} as Record<Shape, ShapeEditorStrategy>;
+const shapeEditorRegistry: Record<Shape, ShapeEditor> = {} as Record<Shape, ShapeEditor>;
 
 // Register a shape editor
-export function registerShapeEditor(shapeType: Shape, strategy: ShapeEditorStrategy): void {
+export function registerShapeEditor(shapeType: Shape, strategy: ShapeEditor): void {
   shapeEditorRegistry[shapeType] = strategy;
 }
 
 // Get a shape editor
-export function getShapeEditor(shapeType: Shape): ShapeEditorStrategy {
+export function getShapeEditor(shapeType: Shape): ShapeEditor {
   const editor = shapeEditorRegistry[shapeType];
   if (!editor) {
     throw new Error(`No editor registered for shape type: ${shapeType}`);
@@ -28,7 +28,7 @@ export function getShapeEditor(shapeType: Shape): ShapeEditorStrategy {
 }
 
 // Line Editor Strategy
-const lineEditorStrategy: ShapeEditorStrategy = {
+const lineEditor: ShapeEditor = {
   renderSizeFields: (objectInfo, onUpdate) => {
     const { currentPoint } = objectInfo;
     
@@ -66,7 +66,7 @@ const lineEditorStrategy: ShapeEditorStrategy = {
 };
 
 // Rectangle Editor Strategy
-const rectangleEditorStrategy: ShapeEditorStrategy = {
+const rectangleEditor: ShapeEditor = {
   renderSizeFields: (objectInfo, onUpdate) => {
     const { startPoint, currentPoint } = objectInfo;
     const width = currentPoint.x - startPoint.x;
@@ -106,7 +106,7 @@ const rectangleEditorStrategy: ShapeEditorStrategy = {
 };
 
 // Circle Editor Strategy
-const circleEditorStrategy: ShapeEditorStrategy = {
+const circleEditor: ShapeEditor = {
   renderSizeFields: (objectInfo, onUpdate) => {
     const { startPoint, currentPoint } = objectInfo;
     const radius = Math.sqrt(
@@ -133,6 +133,6 @@ const circleEditorStrategy: ShapeEditorStrategy = {
 };
 
 // Register all shape editors
-registerShapeEditor("line", lineEditorStrategy);
-registerShapeEditor("rectangle", rectangleEditorStrategy);
-registerShapeEditor("circle", circleEditorStrategy);
+registerShapeEditor("line", lineEditor);
+registerShapeEditor("rectangle", rectangleEditor);
+registerShapeEditor("circle", circleEditor);
