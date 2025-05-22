@@ -12,18 +12,15 @@ export function ObjectDetails({ objects, onUpdate }: { objects: ObjectInfo[]; on
     );
   }
 
-  // 선택된 객체들 중 z-index가 가장 높은 객체만 보여줌.
-  const highestZIndexObject = objects.reduce((prev, curr) =>
-    prev.zIndex > curr.zIndex ? prev : curr
-  );
-
   return (
     <Box minW={300} p={2} bg="gray.700">
-      <ObjectDetail
-        key={highestZIndexObject.id}
-        objectInfo={highestZIndexObject}
-        onUpdate={onUpdate}
-      />
+      {objects.map((object) => (
+        <ObjectDetail
+          key={object.id}
+          objectInfo={object}
+          onUpdate={onUpdate}
+        />
+      ))}
     </Box>
   );
 }
