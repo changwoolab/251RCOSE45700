@@ -6,13 +6,12 @@ import { Mode, ObjectInfo } from "@/types/objects";
 import { Box, ChakraProvider, defaultSystem, Flex, Text } from "@chakra-ui/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ShapeDrawerFactory } from "@/shapes/ShapeDrawer";
+import { CreateShapeCommand, MoveShapeCommand, DeleteShapeCommand } from "@/commands/CanvasCommand";
 
 export default function Home() {
   const [mode, setMode] = useState<Mode>("line");
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  // Store all drawn objects.
   const [objects, setObjects] = useState<ObjectInfo[]>([]);
-  // Store IDs of selected objects.
   const [selectedObjectIds, setSelectedObjectIds] = useState<number[]>([]);
   const idRef = useRef<number>(1);
 
@@ -53,12 +52,8 @@ export default function Home() {
   }, [objects, updateCanvasSize]);
 
   const clear = () => {
-    setObjects([]);
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const command = new DeleteShapeCommand(objects, setObjects, objects.map(obj => obj.id));
+    command.execute();
   };
 
   // Update a single object (from ObjectDetails changes).
@@ -118,13 +113,11 @@ export default function Home() {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    // Save current canvas state for previews.
     const savedImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
     let onMouseMove: (e: MouseEvent) => void;
     let onMouseUp: (e: MouseEvent) => void;
 
     if (mode === "line" || mode === "rectangle" || mode === "circle") {
-      // Create a new object with default fill and z-index.
       const newObj: ObjectInfo = {
         id: idRef.current++,
         startPoint: { x: startX, y: startY },
@@ -140,65 +133,39 @@ export default function Home() {
         const currentY = e.clientY - rect.top;
         ctx.putImageData(savedImageData, 0, 0);
         ctx.strokeStyle = newObj.color;
-        if (mode === "line") {
-          ctx.beginPath();
-          ctx.moveTo(newObj.startPoint.x, newObj.startPoint.y);
-          ctx.lineTo(currentX, currentY);
-          ctx.stroke();
-        } else if (mode === "rectangle") {
-          const width = currentX - newObj.startPoint.x;
-          const height = currentY - newObj.startPoint.y;
-          ctx.beginPath();
-          ctx.rect(newObj.startPoint.x, newObj.startPoint.y, width, height);
-          ctx.fillStyle = newObj.fillColor;
-          ctx.fill();
-          ctx.stroke();
-        } else if (mode === "circle") {
-          const radius = Math.sqrt(
-            Math.pow(currentX - newObj.startPoint.x, 2) +
-              Math.pow(currentY - newObj.startPoint.y, 2)
-          );
-          ctx.beginPath();
-          ctx.arc(newObj.startPoint.x, newObj.startPoint.y, radius, 0, 2 * Math.PI);
-          ctx.fillStyle = newObj.fillColor;
-          ctx.fill();
-          ctx.stroke();
-        }
+        const drawer = ShapeDrawerFactory.getDrawer(newObj.type);
+        newObj.currentPoint = { x: currentX, y: currentY };
+        drawer.draw(ctx, newObj);
       };
 
       onMouseUp = (e: MouseEvent) => {
         const currentX = e.clientX - rect.left;
         const currentY = e.clientY - rect.top;
         newObj.currentPoint = { x: currentX, y: currentY };
-        setObjects((prev) => [...prev, newObj]);
+        const command = new CreateShapeCommand(objects, setObjects, newObj);
+        command.execute();
         canvas.removeEventListener("mousemove", onMouseMove);
         canvas.removeEventListener("mouseup", onMouseUp);
       };
     } else if (mode === "select") {
-      // In select mode, perform hit testing.
       const clickedPoint = { x: startX, y: startY };
-      // 필터링하여 hit된 객체들을 가져온 후 z-index가 가장 높은 객체만 선택함.
       const hitObjects = objects.filter((obj) => hitTest(clickedPoint, obj));
+      
       if (hitObjects.length === 0) {
         setSelectedObjectIds([]);
         return;
       }
+
       const topObject = hitObjects.reduce((prev, curr) =>
         prev.zIndex > curr.zIndex ? prev : curr
       );
+
       const intendedSelection = e.shiftKey
         ? Array.from(new Set([...selectedObjectIds, topObject.id]))
         : [topObject.id];
+      
       setSelectedObjectIds(intendedSelection);
 
-      // Record the original positions of selected objects.
-      const originalPositions = objects
-        .filter((obj) => intendedSelection.includes(obj.id))
-        .map((obj) => ({
-          id: obj.id,
-          startPoint: { ...obj.startPoint },
-          currentPoint: { ...obj.currentPoint },
-        }));
       const moveStartX = startX;
       const moveStartY = startY;
 
@@ -207,36 +174,9 @@ export default function Home() {
         const currentY = e.clientY - rect.top;
         const deltaX = currentX - moveStartX;
         const deltaY = currentY - moveStartY;
-        const movedObjects = objects.map((obj) => {
-          if (intendedSelection.includes(obj.id)) {
-            const original = originalPositions.find((o) => o.id === obj.id);
-            if (original) {
-              return {
-                ...obj,
-                startPoint: {
-                  x: original.startPoint.x + deltaX,
-                  y: original.startPoint.y + deltaY,
-                },
-                currentPoint: {
-                  x: original.currentPoint.x + deltaX,
-                  y: original.currentPoint.y + deltaY,
-                },
-              };
-            }
-          }
-          return obj;
-        });
-        // Update state so that ObjectDetails shows the new positions.
-        setObjects(movedObjects);
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        const sortedMoved = [...movedObjects].sort(
-          (a, b) => a.zIndex - b.zIndex
-        );
-        sortedMoved.forEach((obj) => {
-          ctx.strokeStyle = obj.color;
-          const drawer = ShapeDrawerFactory.getDrawer(obj.type);
-          drawer.draw(ctx, obj);
-        });
+
+        const command = new MoveShapeCommand(objects, setObjects, intendedSelection, deltaX, deltaY);
+        command.execute();
       };
 
       onMouseUp = (e: MouseEvent) => {
@@ -244,27 +184,9 @@ export default function Home() {
         const currentY = e.clientY - rect.top;
         const deltaX = currentX - moveStartX;
         const deltaY = currentY - moveStartY;
-        const updatedObjects = objects.map((obj) => {
-          if (intendedSelection.includes(obj.id)) {
-            const original = originalPositions.find((o) => o.id === obj.id);
-            if (original) {
-              return {
-                ...obj,
-                startPoint: {
-                  x: original.startPoint.x + deltaX,
-                  y: original.startPoint.y + deltaY,
-                },
-                currentPoint: {
-                  x: original.currentPoint.x + deltaX,
-                  y: original.currentPoint.y + deltaY,
-                },
-              };
-            }
-          }
-          return obj;
-        });
-        setObjects(updatedObjects);
-        redrawObjects();
+
+        const command = new MoveShapeCommand(objects, setObjects, intendedSelection, deltaX, deltaY);
+        command.execute();
         canvas.removeEventListener("mousemove", onMouseMove);
         canvas.removeEventListener("mouseup", onMouseUp);
       };
@@ -293,7 +215,6 @@ export default function Home() {
             style={{ backgroundColor: "white" }}
           />
         </Box>
-        {/* Pass selected objects along with the update callback */}
         <ObjectDetails
           objects={objects.filter((obj) => selectedObjectIds.includes(obj.id))}
           onUpdate={updateObject}
