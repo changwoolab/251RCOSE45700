@@ -1,4 +1,5 @@
 import { ObjectInfo } from "@/types/objects";
+import { getShapeEditor } from "@/shapes/ShapeEditors";
 import { Box, Text } from "@chakra-ui/react";
 import React from "react";
 
@@ -30,92 +31,9 @@ export function ObjectDetails({ objects, onUpdate }: { objects: ObjectInfo[]; on
 function ObjectDetail({ objectInfo, onUpdate }: { objectInfo: ObjectInfo; onUpdate: (updated: ObjectInfo) => void; }) {
   const { id, startPoint, currentPoint, color, fillColor, zIndex, type } = objectInfo;
 
-  let sizeFields = null;
-  if (type === "line") {
-    sizeFields = (
-      <>
-        <Text>
-          End X: <input
-            type="number"
-            value={currentPoint.x}
-            onChange={(e) => {
-              const newX = parseFloat(e.target.value);
-              onUpdate({
-                ...objectInfo,
-                currentPoint: { ...currentPoint, x: newX },
-              });
-            }}
-          />
-        </Text>
-        <Text>
-          End Y: <input
-            type="number"
-            value={currentPoint.y}
-            onChange={(e) => {
-              const newY = parseFloat(e.target.value);
-              onUpdate({
-                ...objectInfo,
-                currentPoint: { ...currentPoint, y: newY },
-              });
-            }}
-          />
-        </Text>
-      </>
-    );
-  } else if (type === "rectangle") {
-    const width = currentPoint.x - startPoint.x;
-    const height = currentPoint.y - startPoint.y;
-    sizeFields = (
-      <>
-        <Text>
-          Width: <input
-            type="number"
-            value={width}
-            onChange={(e) => {
-              const newWidth = parseFloat(e.target.value);
-              onUpdate({
-                ...objectInfo,
-                currentPoint: { x: startPoint.x + newWidth, y: currentPoint.y },
-              });
-            }}
-          />
-        </Text>
-        <Text>
-          Height: <input
-            type="number"
-            value={height}
-            onChange={(e) => {
-              const newHeight = parseFloat(e.target.value);
-              onUpdate({
-                ...objectInfo,
-                currentPoint: { x: currentPoint.x, y: startPoint.y + newHeight },
-              });
-            }}
-          />
-        </Text>
-      </>
-    );
-  } else if (type === "circle") {
-    const radius = Math.sqrt(
-      Math.pow(currentPoint.x - startPoint.x, 2) +
-      Math.pow(currentPoint.y - startPoint.y, 2)
-    );
-    sizeFields = (
-      <Text>
-        Radius: <input
-          type="number"
-          value={radius}
-          onChange={(e) => {
-            const newRadius = parseFloat(e.target.value);
-            onUpdate({
-              ...objectInfo,
-              currentPoint: { x: startPoint.x + newRadius, y: startPoint.y },
-            });
-          }}
-        />
-      </Text>
-    );
-  }
+  // 전략 패턴을 사용하여 도형 타입에 맞는 에디터 가져오기
+  const shapeEditor = getShapeEditor(type);
+  const sizeFields = shapeEditor.renderSizeFields(objectInfo, onUpdate);
 
   return (
     <Box minW={300} border="1px solid gray" p={2} mb={2}>

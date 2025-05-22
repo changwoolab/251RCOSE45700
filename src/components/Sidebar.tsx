@@ -2,7 +2,7 @@ import type { Mode } from "@/types/objects";
 import { Button, Flex, Spacer } from "@chakra-ui/react";
 
 interface SidebarProps {
-  setMode: React.Dispatch<React.SetStateAction<Mode>>;
+  setMode: (mode: Mode) => void;
   clear: () => void;
 }
 
