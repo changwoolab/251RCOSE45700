@@ -5,50 +5,44 @@ import { Sidebar } from "@/components/Sidebar";
 import { Mode, ObjectInfo } from "@/types/objects";
 import { Box, ChakraProvider, defaultSystem, Flex, Text } from "@chakra-ui/react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { DeleteShapeCommand } from "@/commands/CanvasCommand";
-import { canvasSubject } from "@/observers/CanvasObserver";
-import { CanvasRenderer } from "@/observers/CanvasRenderer";
 import { DrawModeStrategy } from "@/strategies/DrawModeStrategy";
 import { SelectModeStrategy } from "@/strategies/SelectModeStrategy";
 import { CanvasModeStrategy } from "@/strategies/CanvasModeStrategy";
+import { canvasModel, CanvasState } from "@/models/CanvasModel";
+import { shapeDrawerFactory } from "@/shapes/ShapeDrawer";
 
 export default function Home() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const idRef = useRef<number>(1);
-  const [renderer, setRenderer] = useState<CanvasRenderer | null>(null);
+  const [state, setState] = useState<CanvasState>(canvasModel.getState());
   const [currentStrategy, setCurrentStrategy] = useState<CanvasModeStrategy | null>(null);
 
-  // Initialize canvas renderer and strategy
+  // Subscribe to model changes
   useEffect(() => {
-    if (canvasRef.current && !renderer) {
-      const newRenderer = new CanvasRenderer(canvasRef.current);
-      canvasSubject.attach(newRenderer);
-      setRenderer(newRenderer);
-    }
-    return () => {
-      if (renderer) {
-        canvasSubject.detach(renderer);
-      }
-    };
-  }, [renderer]);
+    const unsubscribe = canvasModel.subscribe((newState) => {
+      setState(newState);
+    });
+    return () => unsubscribe();
+  }, []);
 
   // Update strategy when mode changes
   useEffect(() => {
-    const mode = canvasSubject.getMode();
-    if (mode === "select") {
+    if (state.mode === "select") {
       setCurrentStrategy(new SelectModeStrategy());
-    } else if (mode === "line" || mode === "rectangle" || mode === "circle") {
-      setCurrentStrategy(new DrawModeStrategy(mode));
+    } else if (state.mode === "line" || state.mode === "rectangle" || state.mode === "circle") {
+      setCurrentStrategy(new DrawModeStrategy(state.mode));
     } else {
       setCurrentStrategy(null);
     }
-  }, [canvasSubject.getMode()]);
+  }, [state.mode]);
 
   // Update canvas size to match parent's dimensions
   const updateCanvasSize = useCallback(() => {
     if (canvasRef.current && canvasRef.current.parentElement) {
-      canvasRef.current.width = canvasRef.current.parentElement.clientWidth;
-      canvasRef.current.height = canvasRef.current.parentElement.clientHeight;
+      const { clientWidth, clientHeight } = canvasRef.current.parentElement;
+      canvasRef.current.width = clientWidth;
+      canvasRef.current.height = clientHeight;
+      renderCanvas(); // Re-render after resize
     }
   }, []);
 
@@ -58,64 +52,80 @@ export default function Home() {
     return () => window.removeEventListener("resize", updateCanvasSize);
   }, [updateCanvasSize]);
 
-  const clear = () => {
-    const command = new DeleteShapeCommand(
-      canvasSubject.getObjects(),
-      canvasSubject.getObjects().map(obj => obj.id)
-    );
-    command.execute();
-  };
+  // Canvas rendering
+  const renderCanvas = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
 
-  // Update a single object (from ObjectDetails changes)
-  const updateObject = (updated: ObjectInfo) => {
-    const objects = canvasSubject.getObjects();
-    const updatedObjects = objects.map((obj) => 
-      obj.id === updated.id ? updated : obj
-    );
-    canvasSubject.setObjects(updatedObjects);
-  };
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
 
-  // --- Hit-testing helpers ---
-  const isPointNearLine = (p: { x: number; y: number }, line: ObjectInfo) => {
-    const { startPoint, currentPoint } = line;
-    const distance =
-      Math.abs(
-        (currentPoint.y - startPoint.y) * p.x -
-          (currentPoint.x - startPoint.x) * p.y +
-          currentPoint.x * startPoint.y -
-          currentPoint.y * startPoint.x
-      ) /
-      Math.hypot(currentPoint.y - startPoint.y, currentPoint.x - startPoint.x);
-    return distance < 5;
-  };
+    // Clear canvas
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  const isPointInRect = (p: { x: number; y: number }, rectObj: ObjectInfo) => {
-    const { startPoint, currentPoint } = rectObj;
-    const minX = Math.min(startPoint.x, currentPoint.x);
-    const maxX = Math.max(startPoint.x, currentPoint.x);
-    const minY = Math.min(startPoint.y, currentPoint.y);
-    const maxY = Math.max(startPoint.y, currentPoint.y);
-    return p.x >= minX && p.x <= maxX && p.y >= minY && p.y <= maxY;
-  };
+    // Sort objects by z-index
+    const sortedObjects = [...state.objects].sort((a, b) => a.zIndex - b.zIndex);
 
-  const isPointInCircle = (p: { x: number; y: number }, circle: ObjectInfo) => {
-    const { startPoint, currentPoint } = circle;
-    const radius = Math.sqrt(
-      Math.pow(currentPoint.x - startPoint.x, 2) +
+    // Draw all objects
+    sortedObjects.forEach(obj => {
+      const drawer = shapeDrawerFactory.getDrawer(obj.type);
+      ctx.strokeStyle = obj.color;
+      ctx.fillStyle = obj.fillColor;
+      drawer.draw(ctx, obj);
+
+      // Draw selection indicator if object is selected
+      if (state.selectedIds.includes(obj.id)) {
+        drawSelectionIndicator(ctx, obj);
+      }
+    });
+  }, [state.objects, state.selectedIds]);
+
+  // Draw selection indicator
+  const drawSelectionIndicator = useCallback((ctx: CanvasRenderingContext2D, obj: ObjectInfo) => {
+    const { startPoint, currentPoint } = obj;
+    ctx.save();
+    ctx.strokeStyle = "#0066ff";
+    ctx.lineWidth = 2;
+    ctx.setLineDash([5, 5]);
+
+    if (obj.type === "line") {
+      ctx.beginPath();
+      ctx.moveTo(startPoint.x, startPoint.y);
+      ctx.lineTo(currentPoint.x, currentPoint.y);
+      ctx.stroke();
+    } else if (obj.type === "rectangle") {
+      const minX = Math.min(startPoint.x, currentPoint.x);
+      const maxX = Math.max(startPoint.x, currentPoint.x);
+      const minY = Math.min(startPoint.y, currentPoint.y);
+      const maxY = Math.max(startPoint.y, currentPoint.y);
+      ctx.strokeRect(minX, minY, maxX - minX, maxY - minY);
+    } else if (obj.type === "circle") {
+      const radius = Math.sqrt(
+        Math.pow(currentPoint.x - startPoint.x, 2) +
         Math.pow(currentPoint.y - startPoint.y, 2)
-    );
-    const dist = Math.hypot(p.x - startPoint.x, p.y - startPoint.y);
-    return dist <= radius;
+      );
+      ctx.beginPath();
+      ctx.arc(startPoint.x, startPoint.y, radius, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    ctx.restore();
+  }, []);
+
+  // Re-render canvas when state changes
+  useEffect(() => {
+    renderCanvas();
+  }, [state, renderCanvas]);
+
+  const clear = () => {
+    canvasModel.deleteObjects(state.objects.map(obj => obj.id));
   };
 
-  const hitTest = (p: { x: number; y: number }, obj: ObjectInfo) => {
-    if (obj.type === "line") return isPointNearLine(p, obj);
-    if (obj.type === "rectangle") return isPointInRect(p, obj);
-    if (obj.type === "circle") return isPointInCircle(p, obj);
-    return false;
+  const updateObject = (updated: ObjectInfo) => {
+    canvasModel.updateObject(updated);
   };
 
-  // --- Mouse event handler ---
+  // Mouse event handler
   const onMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
     if (!canvas || !currentStrategy) return;
@@ -123,8 +133,21 @@ export default function Home() {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
+    const rect = canvas.getBoundingClientRect();
+    const startX = e.clientX - rect.left;
+    const startY = e.clientY - rect.top;
+
     const savedImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    const context = { canvas, ctx, savedImageData, idRef };
+    const context = {
+      model: canvasModel,
+      view: {
+        getCanvasRect: () => rect,
+        getContext: () => ctx,
+        saveImageData: () => savedImageData,
+        restoreImageData: (imageData: ImageData) => ctx.putImageData(imageData, 0, 0)
+      },
+      idRef
+    };
 
     const { onMouseMove, onMouseUp } = currentStrategy.onMouseDown(e, context);
     
@@ -139,10 +162,10 @@ export default function Home() {
       <Flex bgColor={"gray.700"} flex={1} width={"100vw"} height={"100vh"}>
         <Box borderRadius={10}>
           <Sidebar 
-            setMode={(mode) => canvasSubject.setMode(mode)} 
+            setMode={(mode) => canvasModel.setMode(mode)} 
             clear={clear} 
           />
-          <Text>{canvasSubject.getMode()}</Text>
+          <Text>{state.mode}</Text>
         </Box>
         <Box width={"100%"} height={"100%"}>
           <canvas

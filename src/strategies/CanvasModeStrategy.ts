@@ -1,15 +1,21 @@
 import { ObjectInfo } from "@/types/objects";
-import { CanvasCommand } from "@/commands/CanvasCommand";
+import { CanvasModel } from "@/models/CanvasModel";
 
 export interface MousePosition {
   x: number;
   y: number;
 }
 
+export interface CanvasViewContext {
+  getCanvasRect: () => DOMRect;
+  getContext: () => CanvasRenderingContext2D;
+  saveImageData: () => ImageData;
+  restoreImageData: (imageData: ImageData) => void;
+}
+
 export interface CanvasContext {
-  canvas: HTMLCanvasElement;
-  ctx: CanvasRenderingContext2D;
-  savedImageData: ImageData;
+  model: CanvasModel;
+  view: CanvasViewContext;
   idRef: { current: number };
 }
 

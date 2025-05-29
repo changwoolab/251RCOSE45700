@@ -1,6 +1,4 @@
 import { CanvasModeStrategy, CanvasContext, MousePosition } from "./CanvasModeStrategy";
-import { MoveShapeCommand } from "@/commands/CanvasCommand";
-import { canvasSubject } from "@/observers/CanvasObserver";
 import { ObjectInfo } from "@/types/objects";
 
 export class SelectModeStrategy implements CanvasModeStrategy {
@@ -44,16 +42,16 @@ export class SelectModeStrategy implements CanvasModeStrategy {
   }
 
   onMouseDown(e: React.MouseEvent<HTMLCanvasElement>, context: CanvasContext) {
-    const { canvas } = context;
-    const rect = canvas.getBoundingClientRect();
+    const { model, view } = context;
+    const rect = view.getCanvasRect();
     const startX = e.clientX - rect.left;
     const startY = e.clientY - rect.top;
 
     const clickedPoint = { x: startX, y: startY };
-    const hitObjects = canvasSubject.getObjects().filter((obj) => this.hitTest(clickedPoint, obj));
+    const hitObjects = model.getObjects().filter((obj) => this.hitTest(clickedPoint, obj));
     
     if (hitObjects.length === 0) {
-      canvasSubject.setSelectedIds([]);
+      model.setSelectedIds([]);
       return {};
     }
 
@@ -62,10 +60,10 @@ export class SelectModeStrategy implements CanvasModeStrategy {
     );
 
     const intendedSelection = e.shiftKey
-      ? Array.from(new Set([...canvasSubject.getSelectedIds(), topObject.id]))
+      ? Array.from(new Set([...model.getSelectedIds(), topObject.id]))
       : [topObject.id];
     
-    canvasSubject.setSelectedIds(intendedSelection);
+    model.setSelectedIds(intendedSelection);
 
     const moveStartX = startX;
     const moveStartY = startY;
@@ -76,13 +74,7 @@ export class SelectModeStrategy implements CanvasModeStrategy {
       const deltaX = currentX - moveStartX;
       const deltaY = currentY - moveStartY;
 
-      const command = new MoveShapeCommand(
-        canvasSubject.getObjects(),
-        intendedSelection,
-        deltaX,
-        deltaY
-      );
-      command.execute();
+      model.moveObjects(intendedSelection, deltaX, deltaY);
     };
 
     const onMouseUp = (e: MouseEvent) => {
@@ -91,13 +83,8 @@ export class SelectModeStrategy implements CanvasModeStrategy {
       const deltaX = currentX - moveStartX;
       const deltaY = currentY - moveStartY;
 
-      const command = new MoveShapeCommand(
-        canvasSubject.getObjects(),
-        intendedSelection,
-        deltaX,
-        deltaY
-      );
-      command.execute();
+      model.moveObjects(intendedSelection, deltaX, deltaY);
+      const canvas = e.target as HTMLCanvasElement;
       canvas.removeEventListener("mousemove", onMouseMove);
       canvas.removeEventListener("mouseup", onMouseUp);
     };

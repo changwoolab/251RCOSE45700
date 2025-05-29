@@ -1,8 +1,6 @@
 import { ObjectInfo } from "@/types/objects";
 import { CanvasModeStrategy, CanvasContext, MousePosition } from "./CanvasModeStrategy";
-import { CreateShapeCommand } from "@/commands/CanvasCommand";
 import { shapeDrawerFactory } from "@/shapes/ShapeDrawer";
-import { canvasSubject } from "@/observers/CanvasObserver";
 
 export class DrawModeStrategy implements CanvasModeStrategy {
   constructor(private mode: "line" | "rectangle" | "circle") {}
@@ -20,17 +18,19 @@ export class DrawModeStrategy implements CanvasModeStrategy {
   }
 
   onMouseDown(e: React.MouseEvent<HTMLCanvasElement>, context: CanvasContext) {
-    const { canvas, ctx, savedImageData, idRef } = context;
-    const rect = canvas.getBoundingClientRect();
+    const { model, view, idRef } = context;
+    const rect = view.getCanvasRect();
     const startX = e.clientX - rect.left;
     const startY = e.clientY - rect.top;
 
     const newObj = this.createNewObject({ x: startX, y: startY }, idRef.current++);
+    const savedImageData = view.saveImageData();
 
     const onMouseMove = (e: MouseEvent) => {
       const currentX = e.clientX - rect.left;
       const currentY = e.clientY - rect.top;
-      ctx.putImageData(savedImageData, 0, 0);
+      view.restoreImageData(savedImageData);
+      const ctx = view.getContext();
       ctx.strokeStyle = newObj.color;
       const drawer = shapeDrawerFactory.getDrawer(newObj.type);
       newObj.currentPoint = { x: currentX, y: currentY };
@@ -41,11 +41,8 @@ export class DrawModeStrategy implements CanvasModeStrategy {
       const currentX = e.clientX - rect.left;
       const currentY = e.clientY - rect.top;
       newObj.currentPoint = { x: currentX, y: currentY };
-      const command = new CreateShapeCommand(
-        canvasSubject.getObjects(),
-        newObj
-      );
-      command.execute();
+      model.addObject(newObj);
+      const canvas = e.target as HTMLCanvasElement;
       canvas.removeEventListener("mousemove", onMouseMove);
       canvas.removeEventListener("mouseup", onMouseUp);
     };
