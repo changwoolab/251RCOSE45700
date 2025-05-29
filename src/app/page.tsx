@@ -5,62 +5,60 @@ import { Sidebar } from "@/components/Sidebar";
 import { Mode, ObjectInfo } from "@/types/objects";
 import { Box, ChakraProvider, defaultSystem, Flex, Text } from "@chakra-ui/react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ShapeDrawerFactory } from "@/shapes/ShapeDrawer";
+import { shapeDrawerFactory } from "@/shapes/ShapeDrawer";
 import { CreateShapeCommand, MoveShapeCommand, DeleteShapeCommand } from "@/commands/CanvasCommand";
+import { canvasSubject } from "@/observers/CanvasObserver";
+import { CanvasRenderer } from "@/observers/CanvasRenderer";
 
 export default function Home() {
-  const [mode, setMode] = useState<Mode>("line");
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [objects, setObjects] = useState<ObjectInfo[]>([]);
-  const [selectedObjectIds, setSelectedObjectIds] = useState<number[]>([]);
   const idRef = useRef<number>(1);
+  const [renderer, setRenderer] = useState<CanvasRenderer | null>(null);
 
-  // Redraw all objects (sorted by z-index)
-  const redrawObjects = useCallback(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    
-    // 캔버스 초기화
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    
-    // z-index 순서대로 정렬하여 그리기
-    const sortedObjects = [...objects].sort((a, b) => a.zIndex - b.zIndex);
-    
-    sortedObjects.forEach((obj) => {
-        ctx.strokeStyle = obj.color;
-        const drawer = ShapeDrawerFactory.getDrawer(obj.type);
-        drawer.draw(ctx, obj);
-    });
-  }, [objects]);
-
-  // Update canvas size to match parent's dimensions.
-  const updateCanvasSize = useCallback(() => {
-    const canvas = canvasRef.current;
-    if (canvas && canvas.parentElement) {
-      canvas.width = canvas.parentElement.clientWidth;
-      canvas.height = canvas.parentElement.clientHeight;
-      redrawObjects();
+  // Initialize canvas renderer
+  useEffect(() => {
+    if (canvasRef.current && !renderer) {
+      const newRenderer = new CanvasRenderer(canvasRef.current);
+      canvasSubject.attach(newRenderer);
+      setRenderer(newRenderer);
     }
-  }, [redrawObjects]);
+    return () => {
+      if (renderer) {
+        canvasSubject.detach(renderer);
+      }
+    };
+  }, [renderer]);
+
+  // Update canvas size to match parent's dimensions
+  const updateCanvasSize = useCallback(() => {
+    if (canvasRef.current && canvasRef.current.parentElement) {
+      canvasRef.current.width = canvasRef.current.parentElement.clientWidth;
+      canvasRef.current.height = canvasRef.current.parentElement.clientHeight;
+    }
+  }, []);
 
   useEffect(() => {
     updateCanvasSize();
     window.addEventListener("resize", updateCanvasSize);
     return () => window.removeEventListener("resize", updateCanvasSize);
-  }, [objects, updateCanvasSize]);
+  }, [updateCanvasSize]);
 
   const clear = () => {
-    const command = new DeleteShapeCommand(objects, setObjects, objects.map(obj => obj.id));
+    const command = new DeleteShapeCommand(
+      canvasSubject.getObjects(),
+      (objects) => canvasSubject.setObjects(objects),
+      canvasSubject.getObjects().map(obj => obj.id)
+    );
     command.execute();
   };
 
-  // Update a single object (from ObjectDetails changes).
+  // Update a single object (from ObjectDetails changes)
   const updateObject = (updated: ObjectInfo) => {
-    setObjects((prev) =>
-      prev.map((obj) => (obj.id === updated.id ? updated : obj))
+    const objects = canvasSubject.getObjects();
+    const updatedObjects = objects.map((obj) => 
+      obj.id === updated.id ? updated : obj
     );
+    canvasSubject.setObjects(updatedObjects);
   };
 
   // --- Hit-testing helpers ---
@@ -117,6 +115,7 @@ export default function Home() {
     let onMouseMove: (e: MouseEvent) => void;
     let onMouseUp: (e: MouseEvent) => void;
 
+    const mode = canvasSubject.getMode();
     if (mode === "line" || mode === "rectangle" || mode === "circle") {
       const newObj: ObjectInfo = {
         id: idRef.current++,
@@ -133,7 +132,7 @@ export default function Home() {
         const currentY = e.clientY - rect.top;
         ctx.putImageData(savedImageData, 0, 0);
         ctx.strokeStyle = newObj.color;
-        const drawer = ShapeDrawerFactory.getDrawer(newObj.type);
+        const drawer = shapeDrawerFactory.getDrawer(newObj.type);
         newObj.currentPoint = { x: currentX, y: currentY };
         drawer.draw(ctx, newObj);
       };
@@ -142,17 +141,21 @@ export default function Home() {
         const currentX = e.clientX - rect.left;
         const currentY = e.clientY - rect.top;
         newObj.currentPoint = { x: currentX, y: currentY };
-        const command = new CreateShapeCommand(objects, setObjects, newObj);
+        const command = new CreateShapeCommand(
+          canvasSubject.getObjects(),
+          (objects) => canvasSubject.setObjects(objects),
+          newObj
+        );
         command.execute();
         canvas.removeEventListener("mousemove", onMouseMove);
         canvas.removeEventListener("mouseup", onMouseUp);
       };
     } else if (mode === "select") {
       const clickedPoint = { x: startX, y: startY };
-      const hitObjects = objects.filter((obj) => hitTest(clickedPoint, obj));
+      const hitObjects = canvasSubject.getObjects().filter((obj) => hitTest(clickedPoint, obj));
       
       if (hitObjects.length === 0) {
-        setSelectedObjectIds([]);
+        canvasSubject.setSelectedIds([]);
         return;
       }
 
@@ -161,10 +164,10 @@ export default function Home() {
       );
 
       const intendedSelection = e.shiftKey
-        ? Array.from(new Set([...selectedObjectIds, topObject.id]))
+        ? Array.from(new Set([...canvasSubject.getSelectedIds(), topObject.id]))
         : [topObject.id];
       
-      setSelectedObjectIds(intendedSelection);
+      canvasSubject.setSelectedIds(intendedSelection);
 
       const moveStartX = startX;
       const moveStartY = startY;
@@ -175,7 +178,13 @@ export default function Home() {
         const deltaX = currentX - moveStartX;
         const deltaY = currentY - moveStartY;
 
-        const command = new MoveShapeCommand(objects, setObjects, intendedSelection, deltaX, deltaY);
+        const command = new MoveShapeCommand(
+          canvasSubject.getObjects(),
+          (objects) => canvasSubject.setObjects(objects),
+          intendedSelection,
+          deltaX,
+          deltaY
+        );
         command.execute();
       };
 
@@ -185,7 +194,13 @@ export default function Home() {
         const deltaX = currentX - moveStartX;
         const deltaY = currentY - moveStartY;
 
-        const command = new MoveShapeCommand(objects, setObjects, intendedSelection, deltaX, deltaY);
+        const command = new MoveShapeCommand(
+          canvasSubject.getObjects(),
+          (objects) => canvasSubject.setObjects(objects),
+          intendedSelection,
+          deltaX,
+          deltaY
+        );
         command.execute();
         canvas.removeEventListener("mousemove", onMouseMove);
         canvas.removeEventListener("mouseup", onMouseUp);
@@ -197,16 +212,15 @@ export default function Home() {
     canvas.addEventListener("mouseup", onMouseUp);
   };
 
-  useEffect(() => {
-    redrawObjects();
-  }, [objects, redrawObjects]);
-
   return (
     <ChakraProvider value={defaultSystem}>
       <Flex bgColor={"gray.700"} flex={1} width={"100vw"} height={"100vh"}>
         <Box borderRadius={10}>
-          <Sidebar setMode={setMode} clear={clear} />
-          <Text>{mode}</Text>
+          <Sidebar 
+            setMode={(mode) => canvasSubject.setMode(mode)} 
+            clear={clear} 
+          />
+          <Text>{canvasSubject.getMode()}</Text>
         </Box>
         <Box width={"100%"} height={"100%"}>
           <canvas
@@ -216,7 +230,9 @@ export default function Home() {
           />
         </Box>
         <ObjectDetails
-          objects={objects.filter((obj) => selectedObjectIds.includes(obj.id))}
+          objects={canvasSubject.getObjects().filter((obj) => 
+            canvasSubject.getSelectedIds().includes(obj.id)
+          )}
           onUpdate={updateObject}
         />
       </Flex>

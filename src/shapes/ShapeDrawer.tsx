@@ -1,4 +1,4 @@
-import { ObjectInfo } from "@/types/objects";
+import { ObjectInfo, Shape } from "@/types/objects";
 
 // Shape Drawing Strategy Interface
 export interface ShapeDrawer {
@@ -43,19 +43,44 @@ export class CircleDrawer implements ShapeDrawer {
   }
 }
 
-// Shape Drawer Factory
-export class ShapeDrawerFactory {
-  private static drawers: Record<string, ShapeDrawer> = {
-    line: new LineDrawer(),
-    rectangle: new RectangleDrawer(),
-    circle: new CircleDrawer()
-  };
+// Abstract Factory Interface
+export interface ShapeDrawerFactory {
+  getDrawer(type: Shape): ShapeDrawer;
+  registerDrawer(type: Shape, drawer: ShapeDrawer): void;
+}
 
-  static getDrawer(type: string): ShapeDrawer {
-    const drawer = this.drawers[type];
+// Concrete Factory Implementation
+export class ConcreteShapeDrawerFactory implements ShapeDrawerFactory {
+  private static instance: ConcreteShapeDrawerFactory;
+  private drawers: Map<Shape, ShapeDrawer>;
+
+  private constructor() {
+    this.drawers = new Map();
+    // Register default drawers
+    this.registerDrawer("line", new LineDrawer());
+    this.registerDrawer("rectangle", new RectangleDrawer());
+    this.registerDrawer("circle", new CircleDrawer());
+  }
+
+  public static getInstance(): ConcreteShapeDrawerFactory {
+    if (!ConcreteShapeDrawerFactory.instance) {
+      ConcreteShapeDrawerFactory.instance = new ConcreteShapeDrawerFactory();
+    }
+    return ConcreteShapeDrawerFactory.instance;
+  }
+
+  public getDrawer(type: Shape): ShapeDrawer {
+    const drawer = this.drawers.get(type);
     if (!drawer) {
       throw new Error(`No drawer registered for shape type: ${type}`);
     }
     return drawer;
   }
-} 
+
+  public registerDrawer(type: Shape, drawer: ShapeDrawer): void {
+    this.drawers.set(type, drawer);
+  }
+}
+
+// Export a singleton instance for convenience
+export const shapeDrawerFactory = ConcreteShapeDrawerFactory.getInstance(); 
