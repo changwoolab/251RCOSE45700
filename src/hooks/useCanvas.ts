@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef } from 'react';
-import { ObjectInfo } from '@/types/objects';
 import { CanvasModeStrategy, CanvasContext } from '@/strategies/CanvasModeStrategy';
 import { canvasModel } from '@/models/CanvasModel';
 
@@ -20,24 +19,6 @@ interface UseCanvasReturn {
 export function useCanvas({ state, currentStrategy }: UseCanvasProps): UseCanvasReturn {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const idRef = useRef<number>(1);
-
-  // Update canvas size to match parent's dimensions
-  const updateCanvasSize = useCallback(() => {
-    if (canvasRef.current?.parentElement) {
-      const { clientWidth, clientHeight } = canvasRef.current.parentElement;
-      if (canvasRef.current) {
-        canvasRef.current.width = clientWidth;
-        canvasRef.current.height = clientHeight;
-        renderCanvas();
-      }
-    }
-  }, []);
-
-  useEffect(() => {
-    updateCanvasSize();
-    window.addEventListener("resize", updateCanvasSize);
-    return () => window.removeEventListener("resize", updateCanvasSize);
-  }, [updateCanvasSize]);
 
   // Canvas rendering
   const renderCanvas = useCallback(() => {
@@ -125,6 +106,24 @@ export function useCanvas({ state, currentStrategy }: UseCanvasProps): UseCanvas
       }
     });
   }, [state.objects, state.selectedIds]);
+
+  // Update canvas size to match parent's dimensions
+  const updateCanvasSize = useCallback(() => {
+    if (canvasRef.current?.parentElement) {
+      const { clientWidth, clientHeight } = canvasRef.current.parentElement;
+      if (canvasRef.current) {
+        canvasRef.current.width = clientWidth;
+        canvasRef.current.height = clientHeight;
+        renderCanvas();
+      }
+    }
+  }, [renderCanvas]);
+
+  useEffect(() => {
+    updateCanvasSize();
+    window.addEventListener("resize", updateCanvasSize);
+    return () => window.removeEventListener("resize", updateCanvasSize);
+  }, [updateCanvasSize]);
 
   // Re-render canvas when state changes
   useEffect(() => {

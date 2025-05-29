@@ -3,8 +3,6 @@ import { ObjectInfo, Mode } from "@/types/objects";
 // Observer interface
 export interface CanvasObserver {
   onObjectsChanged: (objects: ObjectInfo[]) => void;
-  onSelectionChanged: (selectedIds: number[]) => void;
-  onModeChanged: (mode: Mode) => void;
 }
 
 // Subject class
@@ -55,8 +53,6 @@ export class CanvasSubject {
   private notifyObservers(): void {
     this.observers.forEach(observer => {
       observer.onObjectsChanged(this.objects);
-      observer.onSelectionChanged(this.selectedIds);
-      observer.onModeChanged(this.mode);
     });
   }
 }

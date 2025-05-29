@@ -1,5 +1,5 @@
 import { CanvasObserver } from "./CanvasObserver";
-import { ObjectInfo, Mode } from "@/types/objects";
+import { ObjectInfo } from "@/types/objects";
 import { shapeDrawerFactory } from "@/shapes/ShapeDrawer";
 
 export class CanvasRenderer implements CanvasObserver {
@@ -33,15 +33,5 @@ export class CanvasRenderer implements CanvasObserver {
       const drawer = shapeDrawerFactory.getDrawer(obj.type);
       drawer.draw(this.ctx!, obj);
     });
-  }
-
-  onSelectionChanged(selectedIds: number[]): void {
-    // Selection visualization could be implemented here
-    // For example, drawing selection handles around selected objects
-  }
-
-  onModeChanged(mode: Mode): void {
-    // Mode change visualization could be implemented here
-    // For example, changing cursor style based on mode
   }
 } 
