@@ -46,7 +46,6 @@ export default function Home() {
   const clear = () => {
     const command = new DeleteShapeCommand(
       canvasSubject.getObjects(),
-      (objects) => canvasSubject.setObjects(objects),
       canvasSubject.getObjects().map(obj => obj.id)
     );
     command.execute();
@@ -143,7 +142,6 @@ export default function Home() {
         newObj.currentPoint = { x: currentX, y: currentY };
         const command = new CreateShapeCommand(
           canvasSubject.getObjects(),
-          (objects) => canvasSubject.setObjects(objects),
           newObj
         );
         command.execute();
@@ -180,7 +178,6 @@ export default function Home() {
 
         const command = new MoveShapeCommand(
           canvasSubject.getObjects(),
-          (objects) => canvasSubject.setObjects(objects),
           intendedSelection,
           deltaX,
           deltaY
@@ -196,7 +193,6 @@ export default function Home() {
 
         const command = new MoveShapeCommand(
           canvasSubject.getObjects(),
-          (objects) => canvasSubject.setObjects(objects),
           intendedSelection,
           deltaX,
           deltaY
@@ -208,6 +204,7 @@ export default function Home() {
     } else {
       return;
     }
+
     canvas.addEventListener("mousemove", onMouseMove);
     canvas.addEventListener("mouseup", onMouseUp);
   };
