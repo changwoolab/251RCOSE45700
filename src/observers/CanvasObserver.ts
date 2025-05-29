@@ -2,9 +2,9 @@ import { ObjectInfo, Mode } from "@/types/objects";
 
 // Observer interface
 export interface CanvasObserver {
-  onObjectsChanged(objects: ObjectInfo[]): void;
-  onSelectionChanged(selectedIds: number[]): void;
-  onModeChanged(mode: Mode): void;
+  onObjectsChanged: (objects: ObjectInfo[]) => void;
+  onSelectionChanged: (selectedIds: number[]) => void;
+  onModeChanged: (mode: Mode) => void;
 }
 
 // Subject class
@@ -12,7 +12,7 @@ export class CanvasSubject {
   private observers: CanvasObserver[] = [];
   private objects: ObjectInfo[] = [];
   private selectedIds: number[] = [];
-  private currentMode: Mode = "select";
+  private mode: Mode = "select";
 
   // Observer management
   attach(observer: CanvasObserver): void {
@@ -20,28 +20,26 @@ export class CanvasSubject {
   }
 
   detach(observer: CanvasObserver): void {
-    const index = this.observers.indexOf(observer);
-    if (index !== -1) {
-      this.observers.splice(index, 1);
-    }
+    this.observers = this.observers.filter(obs => obs !== observer);
   }
 
-  // State management
+  // Public methods for state changes
   setObjects(objects: ObjectInfo[]): void {
     this.objects = objects;
-    this.notifyObjectsChanged();
+    this.notifyObservers();
   }
 
-  setSelectedIds(ids: number[]): void {
-    this.selectedIds = ids;
-    this.notifySelectionChanged();
+  setSelectedIds(selectedIds: number[]): void {
+    this.selectedIds = selectedIds;
+    this.notifyObservers();
   }
 
   setMode(mode: Mode): void {
-    this.currentMode = mode;
-    this.notifyModeChanged();
+    this.mode = mode;
+    this.notifyObservers();
   }
 
+  // Getters
   getObjects(): ObjectInfo[] {
     return this.objects;
   }
@@ -51,20 +49,15 @@ export class CanvasSubject {
   }
 
   getMode(): Mode {
-    return this.currentMode;
+    return this.mode;
   }
 
-  // Notification methods
-  private notifyObjectsChanged(): void {
-    this.observers.forEach(observer => observer.onObjectsChanged(this.objects));
-  }
-
-  private notifySelectionChanged(): void {
-    this.observers.forEach(observer => observer.onSelectionChanged(this.selectedIds));
-  }
-
-  private notifyModeChanged(): void {
-    this.observers.forEach(observer => observer.onModeChanged(this.currentMode));
+  private notifyObservers(): void {
+    this.observers.forEach(observer => {
+      observer.onObjectsChanged(this.objects);
+      observer.onSelectionChanged(this.selectedIds);
+      observer.onModeChanged(this.mode);
+    });
   }
 }
 
