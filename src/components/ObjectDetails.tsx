@@ -1,105 +1,122 @@
+import { Box, Input, Stack, Text } from "@chakra-ui/react";
 import { ObjectInfo } from "@/types/objects";
-import { Box, Text, VStack } from "@chakra-ui/react";
-import { CanvasObserver, canvasSubject } from "@/observers/CanvasObserver";
 import { useEffect, useState } from "react";
 
-interface ObjectDetailsProps {
+export interface ObjectDetailsProps {
+  object: ObjectInfo;
   onUpdate: (updated: ObjectInfo) => void;
 }
 
-export function ObjectDetails({ onUpdate }: ObjectDetailsProps) {
-  const [selectedObjects, setSelectedObjects] = useState<ObjectInfo[]>([]);
+export function ObjectDetails({ object, onUpdate }: ObjectDetailsProps) {
+  const [localObject, setLocalObject] = useState<ObjectInfo>(object);
 
+  // Update local state when object prop changes
   useEffect(() => {
-    const observer: CanvasObserver = {
-      onObjectsChanged: (objects) => {
-        // Update selected objects when objects change
-        const selectedIds = canvasSubject.getSelectedIds();
-        setSelectedObjects(objects.filter(obj => selectedIds.includes(obj.id)));
-      },
-      onSelectionChanged: (selectedIds) => {
-        // Update selected objects when selection changes
-        const objects = canvasSubject.getObjects();
-        setSelectedObjects(objects.filter(obj => selectedIds.includes(obj.id)));
-      },
-      onModeChanged: () => {
-        // No need to update on mode change
-      }
-    };
+    setLocalObject(object);
+  }, [object]);
 
-    // Initial setup
-    const objects = canvasSubject.getObjects();
-    const selectedIds = canvasSubject.getSelectedIds();
-    setSelectedObjects(objects.filter(obj => selectedIds.includes(obj.id)));
-
-    // Attach observer
-    canvasSubject.attach(observer);
-
-    // Cleanup
-    return () => {
-      canvasSubject.detach(observer);
-    };
-  }, []);
-
-  if (selectedObjects.length === 0) {
-    return (
-      <Box p={4} bgColor="gray.100" width="200px">
-        <Text>No object selected</Text>
-      </Box>
-    );
-  }
+  const handleChange = (field: keyof ObjectInfo, value: any) => {
+    const updated = { ...localObject, [field]: value };
+    setLocalObject(updated);
+    onUpdate(updated);
+  };
 
   return (
-    <Box p={4} bgColor="gray.100" width="200px">
-      <VStack align="stretch" gap={4}>
-        {selectedObjects.map((obj) => (
-          <Box key={obj.id} p={2} borderWidth={1} borderRadius="md">
-            <Text>Type: {obj.type}</Text>
-            <Text>
-              Color:{" "}
-              <input
-                type="color"
-                value={obj.color}
-                onChange={(e) =>
-                  onUpdate({ ...obj, color: e.target.value })
-                }
-              />
-            </Text>
-            <Text>
-              Fill:{" "}
-              <input
-                type="color"
-                value={obj.fillColor}
-                onChange={(e) =>
-                  onUpdate({ ...obj, fillColor: e.target.value })
-                }
-              />
-            </Text>
-            {obj.type === "rectangle" && (
-              <>
-                <Text>
-                  Width:{" "}
-                  {Math.abs(obj.currentPoint.x - obj.startPoint.x).toFixed(0)}px
-                </Text>
-                <Text>
-                  Height:{" "}
-                  {Math.abs(obj.currentPoint.y - obj.startPoint.y).toFixed(0)}px
-                </Text>
-              </>
-            )}
-            {obj.type === "circle" && (
-              <Text>
-                Radius:{" "}
-                {Math.sqrt(
-                  Math.pow(obj.currentPoint.x - obj.startPoint.x, 2) +
-                    Math.pow(obj.currentPoint.y - obj.startPoint.y, 2)
-                ).toFixed(0)}
-                px
-              </Text>
-            )}
+    <Stack gap={4}>
+      <Text fontSize="lg" fontWeight="bold">Object Details</Text>
+      
+      <Box>
+        <Text mb={2}>Type</Text>
+        <select
+          value={localObject.type}
+          onChange={(e: React.ChangeEvent<HTMLSelectElement>) => handleChange("type", e.target.value)}
+          style={{
+            width: "100%",
+            padding: "8px",
+            borderRadius: "4px",
+            border: "1px solid #E2E8F0",
+            backgroundColor: "white"
+          }}
+        >
+          <option value="line">Line</option>
+          <option value="rectangle">Rectangle</option>
+          <option value="circle">Circle</option>
+        </select>
+      </Box>
+
+      <Box>
+        <Text mb={2}>Stroke Color</Text>
+        <Input
+          type="color"
+          value={localObject.color}
+          onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleChange("color", e.target.value)}
+        />
+      </Box>
+
+      <Box>
+        <Text mb={2}>Fill Color</Text>
+        <Input
+          type="color"
+          value={localObject.fillColor}
+          onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleChange("fillColor", e.target.value)}
+        />
+      </Box>
+
+      <Box>
+        <Text fontWeight="medium" mb={2}>Position</Text>
+        <Stack direction="row" gap={2}>
+          <Box>
+            <Text mb={1}>X</Text>
+            <Input
+              type="number"
+              value={localObject.startPoint.x}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleChange("startPoint", {
+                ...localObject.startPoint,
+                x: Number(e.target.value)
+              })}
+            />
           </Box>
-        ))}
-      </VStack>
-    </Box>
+          <Box>
+            <Text mb={1}>Y</Text>
+            <Input
+              type="number"
+              value={localObject.startPoint.y}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleChange("startPoint", {
+                ...localObject.startPoint,
+                y: Number(e.target.value)
+              })}
+            />
+          </Box>
+        </Stack>
+      </Box>
+
+      <Box>
+        <Text fontWeight="medium" mb={2}>Size</Text>
+        <Stack direction="row" gap={2}>
+          <Box>
+            <Text mb={1}>Width</Text>
+            <Input
+              type="number"
+              value={Math.abs(localObject.currentPoint.x - localObject.startPoint.x)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleChange("currentPoint", {
+                ...localObject.currentPoint,
+                x: localObject.startPoint.x + Number(e.target.value)
+              })}
+            />
+          </Box>
+          <Box>
+            <Text mb={1}>Height</Text>
+            <Input
+              type="number"
+              value={Math.abs(localObject.currentPoint.y - localObject.startPoint.y)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleChange("currentPoint", {
+                ...localObject.currentPoint,
+                y: localObject.startPoint.y + Number(e.target.value)
+              })}
+            />
+          </Box>
+        </Stack>
+      </Box>
+    </Stack>
   );
 }

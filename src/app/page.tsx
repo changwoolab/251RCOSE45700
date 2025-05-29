@@ -157,6 +157,9 @@ export default function Home() {
     }
   };
 
+  // Get selected object for ObjectDetails
+  const selectedObject = state.objects.find(obj => obj.id === state.selectedIds[0]);
+
   return (
     <ChakraProvider value={defaultSystem}>
       <Flex bgColor={"gray.700"} flex={1} width={"100vw"} height={"100vh"}>
@@ -174,7 +177,23 @@ export default function Home() {
             style={{ backgroundColor: "white" }}
           />
         </Box>
-        <ObjectDetails onUpdate={updateObject} />
+        {selectedObject && (
+          <Box 
+            width="300px" 
+            bg="white" 
+            p={4} 
+            boxShadow="md" 
+            borderRadius="md"
+            position="absolute"
+            right="20px"
+            top="20px"
+          >
+            <ObjectDetails 
+              object={selectedObject} 
+              onUpdate={updateObject} 
+            />
+          </Box>
+        )}
       </Flex>
     </ChakraProvider>
   );

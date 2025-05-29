@@ -1,4 +1,5 @@
-import { ObjectInfo } from "@/types/objects";
+import { ObjectInfo as CanvasObjectInfo } from "@/types/objects";
+export type ObjectInfo = CanvasObjectInfo;
 import { CanvasModel } from "@/models/CanvasModel";
 
 export interface MousePosition {

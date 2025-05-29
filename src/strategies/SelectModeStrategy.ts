@@ -1,94 +1,133 @@
-import { CanvasModeStrategy, CanvasContext, MousePosition } from "./CanvasModeStrategy";
-import { ObjectInfo } from "@/types/objects";
+import { CanvasModeStrategy, CanvasContext, MousePosition, ObjectInfo } from "./CanvasModeStrategy";
 
 export class SelectModeStrategy implements CanvasModeStrategy {
-  private hitTest(p: MousePosition, obj: ObjectInfo): boolean {
-    if (obj.type === "line") return this.isPointNearLine(p, obj);
-    if (obj.type === "rectangle") return this.isPointInRect(p, obj);
-    if (obj.type === "circle") return this.isPointInCircle(p, obj);
-    return false;
+  private hitTest(mousePos: MousePosition, obj: ObjectInfo): boolean {
+    switch (obj.type) {
+      case "line":
+        return this.hitTestLine(mousePos, obj);
+      case "rectangle":
+        return this.hitTestRectangle(mousePos, obj);
+      case "circle":
+        return this.hitTestCircle(mousePos, obj);
+      default:
+        return false;
+    }
   }
 
-  private isPointNearLine(p: MousePosition, line: ObjectInfo): boolean {
-    const { startPoint, currentPoint } = line;
-    const distance =
-      Math.abs(
-        (currentPoint.y - startPoint.y) * p.x -
-          (currentPoint.x - startPoint.x) * p.y +
-          currentPoint.x * startPoint.y -
-          currentPoint.y * startPoint.x
-      ) /
-      Math.hypot(currentPoint.y - startPoint.y, currentPoint.x - startPoint.x);
+  private hitTestLine(mousePos: MousePosition, obj: ObjectInfo): boolean {
+    const { startPoint, currentPoint } = obj;
+    const lineLength = Math.sqrt(
+      Math.pow(currentPoint.x - startPoint.x, 2) +
+      Math.pow(currentPoint.y - startPoint.y, 2)
+    );
+    if (lineLength === 0) return false;
+
+    const distance = Math.abs(
+      (currentPoint.y - startPoint.y) * mousePos.x -
+      (currentPoint.x - startPoint.x) * mousePos.y +
+      currentPoint.x * startPoint.y -
+      currentPoint.y * startPoint.x
+    ) / lineLength;
+
     return distance < 5;
   }
 
-  private isPointInRect(p: MousePosition, rectObj: ObjectInfo): boolean {
-    const { startPoint, currentPoint } = rectObj;
+  private hitTestRectangle(mousePos: MousePosition, obj: ObjectInfo): boolean {
+    const { startPoint, currentPoint } = obj;
     const minX = Math.min(startPoint.x, currentPoint.x);
     const maxX = Math.max(startPoint.x, currentPoint.x);
     const minY = Math.min(startPoint.y, currentPoint.y);
     const maxY = Math.max(startPoint.y, currentPoint.y);
-    return p.x >= minX && p.x <= maxX && p.y >= minY && p.y <= maxY;
+
+    return (
+      mousePos.x >= minX &&
+      mousePos.x <= maxX &&
+      mousePos.y >= minY &&
+      mousePos.y <= maxY
+    );
   }
 
-  private isPointInCircle(p: MousePosition, circle: ObjectInfo): boolean {
-    const { startPoint, currentPoint } = circle;
+  private hitTestCircle(mousePos: MousePosition, obj: ObjectInfo): boolean {
+    const { startPoint, currentPoint } = obj;
     const radius = Math.sqrt(
       Math.pow(currentPoint.x - startPoint.x, 2) +
-        Math.pow(currentPoint.y - startPoint.y, 2)
+      Math.pow(currentPoint.y - startPoint.y, 2)
     );
-    const dist = Math.hypot(p.x - startPoint.x, p.y - startPoint.y);
-    return dist <= radius;
+    const distance = Math.sqrt(
+      Math.pow(mousePos.x - startPoint.x, 2) +
+      Math.pow(mousePos.y - startPoint.y, 2)
+    );
+
+    return distance <= radius;
   }
 
   onMouseDown(e: React.MouseEvent<HTMLCanvasElement>, context: CanvasContext) {
     const { model, view } = context;
     const rect = view.getCanvasRect();
-    const startX = e.clientX - rect.left;
-    const startY = e.clientY - rect.top;
+    const clickedPoint = {
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top
+    };
 
-    const clickedPoint = { x: startX, y: startY };
-    const hitObjects = model.getObjects().filter((obj) => this.hitTest(clickedPoint, obj));
-    
-    if (hitObjects.length === 0) {
+    // Get objects from state
+    const objects = model.getState().objects;
+    const hitObjects = objects.filter(obj => this.hitTest(clickedPoint, obj));
+
+    if (hitObjects.length > 0) {
+      const hitObject = hitObjects[hitObjects.length - 1]; // Get the topmost object
+      const currentSelectedIds = model.getState().selectedIds;
+
+      let newSelectedIds: number[];
+      if (e.shiftKey) {
+        // Toggle selection if shift is pressed
+        if (currentSelectedIds.includes(hitObject.id)) {
+          newSelectedIds = currentSelectedIds.filter(id => id !== hitObject.id);
+        } else {
+          newSelectedIds = [...currentSelectedIds, hitObject.id];
+        }
+      } else {
+        // Select only the clicked object if shift is not pressed
+        newSelectedIds = [hitObject.id];
+      }
+
+      model.setSelectedIds(newSelectedIds);
+
+      // Track the last mouse position for relative movement
+      let lastMousePos = {
+        x: e.clientX - rect.left,
+        y: e.clientY - rect.top
+      };
+
+      // Handle object movement
+      const onMouseMove = (e: MouseEvent) => {
+        const currentMousePos = {
+          x: e.clientX - rect.left,
+          y: e.clientY - rect.top
+        };
+
+        // Calculate the relative movement since last mouse position
+        const deltaX = currentMousePos.x - lastMousePos.x;
+        const deltaY = currentMousePos.y - lastMousePos.y;
+
+        // Update objects with the relative movement
+        model.moveObjects(newSelectedIds, deltaX, deltaY);
+
+        // Update last mouse position
+        lastMousePos = currentMousePos;
+      };
+
+      const onMouseUp = () => {
+        const canvas = e.target as HTMLCanvasElement;
+        canvas.removeEventListener("mousemove", onMouseMove);
+        canvas.removeEventListener("mouseup", onMouseUp);
+      };
+
+      return { onMouseMove, onMouseUp };
+    } else if (!e.shiftKey) {
+      // Clear selection if clicking on empty space without shift
       model.setSelectedIds([]);
-      return {};
     }
 
-    const topObject = hitObjects.reduce((prev, curr) =>
-      prev.zIndex > curr.zIndex ? prev : curr
-    );
-
-    const intendedSelection = e.shiftKey
-      ? Array.from(new Set([...model.getSelectedIds(), topObject.id]))
-      : [topObject.id];
-    
-    model.setSelectedIds(intendedSelection);
-
-    const moveStartX = startX;
-    const moveStartY = startY;
-
-    const onMouseMove = (e: MouseEvent) => {
-      const currentX = e.clientX - rect.left;
-      const currentY = e.clientY - rect.top;
-      const deltaX = currentX - moveStartX;
-      const deltaY = currentY - moveStartY;
-
-      model.moveObjects(intendedSelection, deltaX, deltaY);
-    };
-
-    const onMouseUp = (e: MouseEvent) => {
-      const currentX = e.clientX - rect.left;
-      const currentY = e.clientY - rect.top;
-      const deltaX = currentX - moveStartX;
-      const deltaY = currentY - moveStartY;
-
-      model.moveObjects(intendedSelection, deltaX, deltaY);
-      const canvas = e.target as HTMLCanvasElement;
-      canvas.removeEventListener("mousemove", onMouseMove);
-      canvas.removeEventListener("mouseup", onMouseUp);
-    };
-
-    return { onMouseMove, onMouseUp };
+    return {};
   }
 } 
