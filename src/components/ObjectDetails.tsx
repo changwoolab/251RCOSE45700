@@ -15,7 +15,7 @@ export function ObjectDetails({ object, onUpdate }: ObjectDetailsProps) {
     setLocalObject(object);
   }, [object]);
 
-  const handleChange = (field: keyof ObjectInfo, value: any) => {
+  const handleChange = (field: keyof ObjectInfo, value: unknown) => {
     const updated = { ...localObject, [field]: value };
     setLocalObject(updated);
     onUpdate(updated);

@@ -1,4 +1,3 @@
-import { ObjectInfo } from "@/types/objects";
 import { CanvasModel } from "@/models/CanvasModel";
 
 export interface CanvasViewContext {
