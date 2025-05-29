@@ -229,12 +229,7 @@ export default function Home() {
             style={{ backgroundColor: "white" }}
           />
         </Box>
-        <ObjectDetails
-          objects={canvasSubject.getObjects().filter((obj) => 
-            canvasSubject.getSelectedIds().includes(obj.id)
-          )}
-          onUpdate={updateObject}
-        />
+        <ObjectDetails onUpdate={updateObject} />
       </Flex>
     </ChakraProvider>
   );
