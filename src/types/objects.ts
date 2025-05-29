@@ -2,8 +2,12 @@
 export type Shape = "line" | "rectangle" | "circle";
 export type Mode = Shape | "select";
 
-export type Point = { x: number; y: number };
-export type ObjectInfo = {
+export interface Point {
+  x: number;
+  y: number;
+}
+
+export interface ObjectInfo {
   id: number;
   startPoint: Point;
   currentPoint: Point;
@@ -11,4 +15,4 @@ export type ObjectInfo = {
   fillColor: string; // fill color
   zIndex: number;
   type: Shape;
-};
+}

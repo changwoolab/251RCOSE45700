@@ -1,47 +1,53 @@
-import { ObjectInfo } from "@/types/objects";
 import { CanvasModeStrategy, CanvasContext, MousePosition } from "./CanvasModeStrategy";
-import { shapeDrawerFactory } from "@/shapes/ShapeDrawer";
+import { Mode, ObjectInfo, Point } from "@/types/objects";
 
 export class DrawModeStrategy implements CanvasModeStrategy {
-  constructor(private mode: "line" | "rectangle" | "circle") {}
+  constructor(private mode: Mode) {}
 
-  private createNewObject(startPos: MousePosition, id: number): ObjectInfo {
+  private createNewObject(startPoint: Point, id: number): ObjectInfo {
     return {
       id,
-      startPoint: { x: startPos.x, y: startPos.y },
-      currentPoint: { x: startPos.x, y: startPos.y },
-      color: "black",
-      fillColor: "transparent",
-      zIndex: id,
-      type: this.mode,
+      startPoint,
+      currentPoint: { ...startPoint },
+      color: "#000000",
+      fillColor: "#ffffff",
+      zIndex: 0,
+      type: this.mode
     };
   }
 
   onMouseDown(e: React.MouseEvent<HTMLCanvasElement>, context: CanvasContext) {
     const { model, view, idRef } = context;
     const rect = view.getCanvasRect();
-    const startX = e.clientX - rect.left;
-    const startY = e.clientY - rect.top;
-
-    const newObj = this.createNewObject({ x: startX, y: startY }, idRef.current++);
-    const savedImageData = view.saveImageData();
-
-    const onMouseMove = (e: MouseEvent) => {
-      const currentX = e.clientX - rect.left;
-      const currentY = e.clientY - rect.top;
-      view.restoreImageData(savedImageData);
-      const ctx = view.getContext();
-      ctx.strokeStyle = newObj.color;
-      const drawer = shapeDrawerFactory.getDrawer(newObj.type);
-      newObj.currentPoint = { x: currentX, y: currentY };
-      drawer.draw(ctx, newObj);
+    const startPoint: Point = {
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top
     };
 
-    const onMouseUp = (e: MouseEvent) => {
-      const currentX = e.clientX - rect.left;
-      const currentY = e.clientY - rect.top;
-      newObj.currentPoint = { x: currentX, y: currentY };
-      model.addObject(newObj);
+    // Create new object
+    const newObject = this.createNewObject(startPoint, idRef.current++);
+    model.addObject(newObject);
+
+    // Track the last mouse position for drawing
+    let lastMousePos: Point = { ...startPoint };
+
+    const onMouseMove = (e: MouseEvent) => {
+      const currentMousePos: Point = {
+        x: e.clientX - rect.left,
+        y: e.clientY - rect.top
+      };
+
+      // Update the object's current point
+      const updatedObject = {
+        ...newObject,
+        currentPoint: currentMousePos
+      };
+      model.updateObject(updatedObject);
+
+      lastMousePos = currentMousePos;
+    };
+
+    const onMouseUp = () => {
       const canvas = e.target as HTMLCanvasElement;
       canvas.removeEventListener("mousemove", onMouseMove);
       canvas.removeEventListener("mouseup", onMouseUp);
