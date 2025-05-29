@@ -6,28 +6,26 @@ import { Mode, ObjectInfo } from "@/types/objects";
 import { Box, ChakraProvider, defaultSystem, Flex, Text } from "@chakra-ui/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { shapeDrawerFactory } from "@/shapes/ShapeDrawer";
-import { CreateShapeCommand, MoveShapeCommand, DeleteShapeCommand } from "@/commands/CanvasCommand";
-import { canvasSubject } from "@/observers/CanvasObserver";
-import { CanvasRenderer } from "@/observers/CanvasRenderer";
+import { canvasStore } from "@/flux/CanvasStore";
+import { ActionCreators } from "@/flux/types";
+import { dispatcher } from "@/flux/Dispatcher";
 
 export default function Home() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const idRef = useRef<number>(1);
-  const [renderer, setRenderer] = useState<CanvasRenderer | null>(null);
+  const [state, setState] = useState(canvasStore.getState());
 
-  // Initialize canvas renderer
+  // Subscribe to store changes
   useEffect(() => {
-    if (canvasRef.current && !renderer) {
-      const newRenderer = new CanvasRenderer(canvasRef.current);
-      canvasSubject.attach(newRenderer);
-      setRenderer(newRenderer);
-    }
-    return () => {
-      if (renderer) {
-        canvasSubject.detach(renderer);
-      }
+    const handleChange = () => {
+      setState(canvasStore.getState());
     };
-  }, [renderer]);
+
+    canvasStore.addChangeListener(handleChange);
+    return () => {
+      canvasStore.removeChangeListener(handleChange);
+    };
+  }, []);
 
   // Update canvas size to match parent's dimensions
   const updateCanvasSize = useCallback(() => {
@@ -44,21 +42,12 @@ export default function Home() {
   }, [updateCanvasSize]);
 
   const clear = () => {
-    const command = new DeleteShapeCommand(
-      canvasSubject.getObjects(),
-      (objects) => canvasSubject.setObjects(objects),
-      canvasSubject.getObjects().map(obj => obj.id)
-    );
-    command.execute();
+    dispatcher.dispatch(ActionCreators.clearCanvas());
   };
 
   // Update a single object (from ObjectDetails changes)
   const updateObject = (updated: ObjectInfo) => {
-    const objects = canvasSubject.getObjects();
-    const updatedObjects = objects.map((obj) => 
-      obj.id === updated.id ? updated : obj
-    );
-    canvasSubject.setObjects(updatedObjects);
+    dispatcher.dispatch(ActionCreators.updateShape(updated));
   };
 
   // --- Hit-testing helpers ---
@@ -115,7 +104,7 @@ export default function Home() {
     let onMouseMove: (e: MouseEvent) => void;
     let onMouseUp: (e: MouseEvent) => void;
 
-    const mode = canvasSubject.getMode();
+    const mode = state.mode;
     if (mode === "line" || mode === "rectangle" || mode === "circle") {
       const newObj: ObjectInfo = {
         id: idRef.current++,
@@ -141,21 +130,16 @@ export default function Home() {
         const currentX = e.clientX - rect.left;
         const currentY = e.clientY - rect.top;
         newObj.currentPoint = { x: currentX, y: currentY };
-        const command = new CreateShapeCommand(
-          canvasSubject.getObjects(),
-          (objects) => canvasSubject.setObjects(objects),
-          newObj
-        );
-        command.execute();
+        dispatcher.dispatch(ActionCreators.createShape(newObj));
         canvas.removeEventListener("mousemove", onMouseMove);
         canvas.removeEventListener("mouseup", onMouseUp);
       };
     } else if (mode === "select") {
       const clickedPoint = { x: startX, y: startY };
-      const hitObjects = canvasSubject.getObjects().filter((obj) => hitTest(clickedPoint, obj));
+      const hitObjects = state.objects.filter((obj) => hitTest(clickedPoint, obj));
       
       if (hitObjects.length === 0) {
-        canvasSubject.setSelectedIds([]);
+        dispatcher.dispatch(ActionCreators.selectShapes([]));
         return;
       }
 
@@ -164,10 +148,10 @@ export default function Home() {
       );
 
       const intendedSelection = e.shiftKey
-        ? Array.from(new Set([...canvasSubject.getSelectedIds(), topObject.id]))
+        ? Array.from(new Set([...state.selectedIds, topObject.id]))
         : [topObject.id];
       
-      canvasSubject.setSelectedIds(intendedSelection);
+      dispatcher.dispatch(ActionCreators.selectShapes(intendedSelection));
 
       const moveStartX = startX;
       const moveStartY = startY;
@@ -178,14 +162,7 @@ export default function Home() {
         const deltaX = currentX - moveStartX;
         const deltaY = currentY - moveStartY;
 
-        const command = new MoveShapeCommand(
-          canvasSubject.getObjects(),
-          (objects) => canvasSubject.setObjects(objects),
-          intendedSelection,
-          deltaX,
-          deltaY
-        );
-        command.execute();
+        dispatcher.dispatch(ActionCreators.moveShape(intendedSelection, deltaX, deltaY));
       };
 
       onMouseUp = (e: MouseEvent) => {
@@ -194,14 +171,7 @@ export default function Home() {
         const deltaX = currentX - moveStartX;
         const deltaY = currentY - moveStartY;
 
-        const command = new MoveShapeCommand(
-          canvasSubject.getObjects(),
-          (objects) => canvasSubject.setObjects(objects),
-          intendedSelection,
-          deltaX,
-          deltaY
-        );
-        command.execute();
+        dispatcher.dispatch(ActionCreators.moveShape(intendedSelection, deltaX, deltaY));
         canvas.removeEventListener("mousemove", onMouseMove);
         canvas.removeEventListener("mouseup", onMouseUp);
       };
@@ -212,15 +182,34 @@ export default function Home() {
     canvas.addEventListener("mouseup", onMouseUp);
   };
 
+  // Redraw canvas when state changes
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    // Clear canvas
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    // Sort objects by z-index and draw
+    const sortedObjects = [...state.objects].sort((a, b) => a.zIndex - b.zIndex);
+    sortedObjects.forEach((obj) => {
+      ctx.strokeStyle = obj.color;
+      const drawer = shapeDrawerFactory.getDrawer(obj.type);
+      drawer.draw(ctx, obj);
+    });
+  }, [state.objects]);
+
   return (
     <ChakraProvider value={defaultSystem}>
       <Flex bgColor={"gray.700"} flex={1} width={"100vw"} height={"100vh"}>
         <Box borderRadius={10}>
           <Sidebar 
-            setMode={(mode) => canvasSubject.setMode(mode)} 
+            setMode={(mode) => dispatcher.dispatch(ActionCreators.changeMode(mode))} 
             clear={clear} 
           />
-          <Text>{canvasSubject.getMode()}</Text>
+          <Text>{state.mode}</Text>
         </Box>
         <Box width={"100%"} height={"100%"}>
           <canvas
