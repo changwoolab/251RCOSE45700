@@ -2,14 +2,13 @@
 
 import { ObjectDetails } from "@/components/ObjectDetails";
 import { Sidebar } from "@/components/Sidebar";
-import { Mode, ObjectInfo } from "@/types/objects";
+import { Mode, ObjectInfo, Shape } from "@/types/objects";
 import { Box, ChakraProvider, defaultSystem, Flex, Text } from "@chakra-ui/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { DrawModeStrategy } from "@/strategies/DrawModeStrategy";
 import { SelectModeStrategy } from "@/strategies/SelectModeStrategy";
 import { CanvasModeStrategy } from "@/strategies/CanvasModeStrategy";
 import { canvasModel, CanvasState } from "@/models/CanvasModel";
-import { shapeDrawerFactory } from "@/shapes/ShapeDrawer";
 
 export default function Home() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -30,7 +29,7 @@ export default function Home() {
     if (state.mode === "select") {
       setCurrentStrategy(new SelectModeStrategy());
     } else if (state.mode === "line" || state.mode === "rectangle" || state.mode === "circle") {
-      setCurrentStrategy(new DrawModeStrategy(state.mode));
+      setCurrentStrategy(new DrawModeStrategy(state.mode as Shape));
     } else {
       setCurrentStrategy(null);
     }
@@ -38,11 +37,13 @@ export default function Home() {
 
   // Update canvas size to match parent's dimensions
   const updateCanvasSize = useCallback(() => {
-    if (canvasRef.current && canvasRef.current.parentElement) {
+    if (canvasRef.current?.parentElement) {
       const { clientWidth, clientHeight } = canvasRef.current.parentElement;
-      canvasRef.current.width = clientWidth;
-      canvasRef.current.height = clientHeight;
-      renderCanvas(); // Re-render after resize
+      if (canvasRef.current) {
+        canvasRef.current.width = clientWidth;
+        canvasRef.current.height = clientHeight;
+        renderCanvas();
+      }
     }
   }, []);
 
@@ -68,82 +69,104 @@ export default function Home() {
 
     // Draw all objects
     sortedObjects.forEach(obj => {
-      const drawer = shapeDrawerFactory.getDrawer(obj.type);
       ctx.strokeStyle = obj.color;
       ctx.fillStyle = obj.fillColor;
-      drawer.draw(ctx, obj);
+
+      switch (obj.type) {
+        case "line":
+          ctx.beginPath();
+          ctx.moveTo(obj.startPoint.x, obj.startPoint.y);
+          ctx.lineTo(obj.currentPoint.x, obj.currentPoint.y);
+          ctx.stroke();
+          break;
+        case "rectangle": {
+          const minX = Math.min(obj.startPoint.x, obj.currentPoint.x);
+          const maxX = Math.max(obj.startPoint.x, obj.currentPoint.x);
+          const minY = Math.min(obj.startPoint.y, obj.currentPoint.y);
+          const maxY = Math.max(obj.startPoint.y, obj.currentPoint.y);
+          ctx.fillRect(minX, minY, maxX - minX, maxY - minY);
+          ctx.strokeRect(minX, minY, maxX - minX, maxY - minY);
+          break;
+        }
+        case "circle": {
+          const radius = Math.sqrt(
+            Math.pow(obj.currentPoint.x - obj.startPoint.x, 2) +
+            Math.pow(obj.currentPoint.y - obj.startPoint.y, 2)
+          );
+          ctx.beginPath();
+          ctx.arc(obj.startPoint.x, obj.startPoint.y, radius, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+          break;
+        }
+      }
 
       // Draw selection indicator if object is selected
       if (state.selectedIds.includes(obj.id)) {
-        drawSelectionIndicator(ctx, obj);
+        ctx.save();
+        ctx.strokeStyle = "#0066ff";
+        ctx.lineWidth = 2;
+        ctx.setLineDash([5, 5]);
+
+        switch (obj.type) {
+          case "line":
+            ctx.beginPath();
+            ctx.moveTo(obj.startPoint.x, obj.startPoint.y);
+            ctx.lineTo(obj.currentPoint.x, obj.currentPoint.y);
+            ctx.stroke();
+            break;
+          case "rectangle": {
+            const minX = Math.min(obj.startPoint.x, obj.currentPoint.x);
+            const maxX = Math.max(obj.startPoint.x, obj.currentPoint.x);
+            const minY = Math.min(obj.startPoint.y, obj.currentPoint.y);
+            const maxY = Math.max(obj.startPoint.y, obj.currentPoint.y);
+            ctx.strokeRect(minX, minY, maxX - minX, maxY - minY);
+            break;
+          }
+          case "circle": {
+            const radius = Math.sqrt(
+              Math.pow(obj.currentPoint.x - obj.startPoint.x, 2) +
+              Math.pow(obj.currentPoint.y - obj.startPoint.y, 2)
+            );
+            ctx.beginPath();
+            ctx.arc(obj.startPoint.x, obj.startPoint.y, radius, 0, Math.PI * 2);
+            ctx.stroke();
+            break;
+          }
+        }
+
+        ctx.restore();
       }
     });
   }, [state.objects, state.selectedIds]);
-
-  // Draw selection indicator
-  const drawSelectionIndicator = useCallback((ctx: CanvasRenderingContext2D, obj: ObjectInfo) => {
-    const { startPoint, currentPoint } = obj;
-    ctx.save();
-    ctx.strokeStyle = "#0066ff";
-    ctx.lineWidth = 2;
-    ctx.setLineDash([5, 5]);
-
-    if (obj.type === "line") {
-      ctx.beginPath();
-      ctx.moveTo(startPoint.x, startPoint.y);
-      ctx.lineTo(currentPoint.x, currentPoint.y);
-      ctx.stroke();
-    } else if (obj.type === "rectangle") {
-      const minX = Math.min(startPoint.x, currentPoint.x);
-      const maxX = Math.max(startPoint.x, currentPoint.x);
-      const minY = Math.min(startPoint.y, currentPoint.y);
-      const maxY = Math.max(startPoint.y, currentPoint.y);
-      ctx.strokeRect(minX, minY, maxX - minX, maxY - minY);
-    } else if (obj.type === "circle") {
-      const radius = Math.sqrt(
-        Math.pow(currentPoint.x - startPoint.x, 2) +
-        Math.pow(currentPoint.y - startPoint.y, 2)
-      );
-      ctx.beginPath();
-      ctx.arc(startPoint.x, startPoint.y, radius, 0, Math.PI * 2);
-      ctx.stroke();
-    }
-
-    ctx.restore();
-  }, []);
 
   // Re-render canvas when state changes
   useEffect(() => {
     renderCanvas();
   }, [state, renderCanvas]);
 
-  const clear = () => {
+  const clear = useCallback(() => {
     canvasModel.deleteObjects(state.objects.map(obj => obj.id));
-  };
+  }, [state.objects]);
 
-  const updateObject = (updated: ObjectInfo) => {
+  const updateObject = useCallback((updated: ObjectInfo) => {
     canvasModel.updateObject(updated);
-  };
+  }, []);
 
   // Mouse event handler
-  const onMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    const canvas = canvasRef.current;
-    if (!canvas || !currentStrategy) return;
+  const onMouseDown = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!canvasRef.current || !currentStrategy) return;
 
-    const ctx = canvas.getContext("2d");
+    const ctx = canvasRef.current.getContext("2d");
     if (!ctx) return;
 
-    const rect = canvas.getBoundingClientRect();
-    const startX = e.clientX - rect.left;
-    const startY = e.clientY - rect.top;
-
-    const savedImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const rect = canvasRef.current.getBoundingClientRect();
     const context = {
       model: canvasModel,
       view: {
         getCanvasRect: () => rect,
         getContext: () => ctx,
-        saveImageData: () => savedImageData,
+        saveImageData: () => ctx.getImageData(0, 0, canvasRef.current!.width, canvasRef.current!.height),
         restoreImageData: (imageData: ImageData) => ctx.putImageData(imageData, 0, 0)
       },
       idRef
@@ -152,25 +175,25 @@ export default function Home() {
     const { onMouseMove, onMouseUp } = currentStrategy.onMouseDown(e, context);
     
     if (onMouseMove && onMouseUp) {
-      canvas.addEventListener("mousemove", onMouseMove);
-      canvas.addEventListener("mouseup", onMouseUp);
+      canvasRef.current.addEventListener("mousemove", onMouseMove);
+      canvasRef.current.addEventListener("mouseup", onMouseUp);
     }
-  };
+  }, [currentStrategy]);
 
   // Get selected object for ObjectDetails
   const selectedObject = state.objects.find(obj => obj.id === state.selectedIds[0]);
 
   return (
     <ChakraProvider value={defaultSystem}>
-      <Flex bgColor={"gray.700"} flex={1} width={"100vw"} height={"100vh"}>
+      <Flex bgColor="gray.700" flex={1} width="100vw" height="100vh">
         <Box borderRadius={10}>
           <Sidebar 
-            setMode={(mode) => canvasModel.setMode(mode)} 
+            setMode={(mode: Mode) => canvasModel.setMode(mode)} 
             clear={clear} 
           />
           <Text>{state.mode}</Text>
         </Box>
-        <Box width={"100%"} height={"100%"}>
+        <Box width="100%" height="100%">
           <canvas
             ref={canvasRef}
             onMouseDown={onMouseDown}

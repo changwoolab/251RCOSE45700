@@ -1,8 +1,8 @@
-import { CanvasModeStrategy, CanvasContext, MousePosition } from "./CanvasModeStrategy";
-import { Mode, ObjectInfo, Point } from "@/types/objects";
+import { CanvasModeStrategy, CanvasContext } from "./CanvasModeStrategy";
+import { ObjectInfo, Point, Shape } from "@/types/objects";
 
 export class DrawModeStrategy implements CanvasModeStrategy {
-  constructor(private mode: Mode) {}
+  constructor(private mode: Shape) {}
 
   private createNewObject(startPoint: Point, id: number): ObjectInfo {
     return {
@@ -28,9 +28,6 @@ export class DrawModeStrategy implements CanvasModeStrategy {
     const newObject = this.createNewObject(startPoint, idRef.current++);
     model.addObject(newObject);
 
-    // Track the last mouse position for drawing
-    let lastMousePos: Point = { ...startPoint };
-
     const onMouseMove = (e: MouseEvent) => {
       const currentMousePos: Point = {
         x: e.clientX - rect.left,
@@ -43,8 +40,6 @@ export class DrawModeStrategy implements CanvasModeStrategy {
         currentPoint: currentMousePos
       };
       model.updateObject(updatedObject);
-
-      lastMousePos = currentMousePos;
     };
 
     const onMouseUp = () => {

@@ -1,11 +1,5 @@
-import { ObjectInfo as CanvasObjectInfo } from "@/types/objects";
-export type ObjectInfo = CanvasObjectInfo;
+import { ObjectInfo } from "@/types/objects";
 import { CanvasModel } from "@/models/CanvasModel";
-
-export interface MousePosition {
-  x: number;
-  y: number;
-}
 
 export interface CanvasViewContext {
   getCanvasRect: () => DOMRect;
@@ -25,6 +19,4 @@ export interface CanvasModeStrategy {
     onMouseMove?: (e: MouseEvent) => void;
     onMouseUp?: (e: MouseEvent) => void;
   };
-  onMouseMove?: (e: MouseEvent, context: CanvasContext) => void;
-  onMouseUp?: (e: MouseEvent, context: CanvasContext) => void;
 } 

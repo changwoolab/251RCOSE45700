@@ -1,4 +1,4 @@
-import { CanvasModeStrategy, CanvasContext, MousePosition } from "./CanvasModeStrategy";
+import { CanvasModeStrategy, CanvasContext } from "./CanvasModeStrategy";
 import { Point } from "@/types/objects";
 
 export class SelectModeStrategy implements CanvasModeStrategy {
