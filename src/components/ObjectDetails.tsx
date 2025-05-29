@@ -1,7 +1,7 @@
 import { ObjectInfo } from "@/types/objects";
 import { Box, Text, VStack } from "@chakra-ui/react";
+import { CanvasObserver, canvasSubject } from "@/observers/CanvasObserver";
 import { useEffect, useState } from "react";
-import { canvasStore } from "@/flux/CanvasStore";
 
 interface ObjectDetailsProps {
   onUpdate: (updated: ObjectInfo) => void;
@@ -11,20 +11,33 @@ export function ObjectDetails({ onUpdate }: ObjectDetailsProps) {
   const [selectedObjects, setSelectedObjects] = useState<ObjectInfo[]>([]);
 
   useEffect(() => {
-    const handleChange = () => {
-      const state = canvasStore.getState();
-      setSelectedObjects(
-        state.objects.filter(obj => state.selectedIds.includes(obj.id))
-      );
+    const observer: CanvasObserver = {
+      onObjectsChanged: (objects) => {
+        // Update selected objects when objects change
+        const selectedIds = canvasSubject.getSelectedIds();
+        setSelectedObjects(objects.filter(obj => selectedIds.includes(obj.id)));
+      },
+      onSelectionChanged: (selectedIds) => {
+        // Update selected objects when selection changes
+        const objects = canvasSubject.getObjects();
+        setSelectedObjects(objects.filter(obj => selectedIds.includes(obj.id)));
+      },
+      onModeChanged: () => {
+        // No need to update on mode change
+      }
     };
 
     // Initial setup
-    handleChange();
+    const objects = canvasSubject.getObjects();
+    const selectedIds = canvasSubject.getSelectedIds();
+    setSelectedObjects(objects.filter(obj => selectedIds.includes(obj.id)));
 
-    // Subscribe to store changes
-    canvasStore.addChangeListener(handleChange);
+    // Attach observer
+    canvasSubject.attach(observer);
+
+    // Cleanup
     return () => {
-      canvasStore.removeChangeListener(handleChange);
+      canvasSubject.detach(observer);
     };
   }, []);
 
