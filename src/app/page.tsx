@@ -5,17 +5,20 @@ import { Sidebar } from "@/components/Sidebar";
 import { Mode, ObjectInfo } from "@/types/objects";
 import { Box, ChakraProvider, defaultSystem, Flex, Text } from "@chakra-ui/react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { shapeDrawerFactory } from "@/shapes/ShapeDrawer";
-import { CreateShapeCommand, MoveShapeCommand, DeleteShapeCommand } from "@/commands/CanvasCommand";
+import { DeleteShapeCommand } from "@/commands/CanvasCommand";
 import { canvasSubject } from "@/observers/CanvasObserver";
 import { CanvasRenderer } from "@/observers/CanvasRenderer";
+import { DrawModeStrategy } from "@/strategies/DrawModeStrategy";
+import { SelectModeStrategy } from "@/strategies/SelectModeStrategy";
+import { CanvasModeStrategy } from "@/strategies/CanvasModeStrategy";
 
 export default function Home() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const idRef = useRef<number>(1);
   const [renderer, setRenderer] = useState<CanvasRenderer | null>(null);
+  const [currentStrategy, setCurrentStrategy] = useState<CanvasModeStrategy | null>(null);
 
-  // Initialize canvas renderer
+  // Initialize canvas renderer and strategy
   useEffect(() => {
     if (canvasRef.current && !renderer) {
       const newRenderer = new CanvasRenderer(canvasRef.current);
@@ -28,6 +31,18 @@ export default function Home() {
       }
     };
   }, [renderer]);
+
+  // Update strategy when mode changes
+  useEffect(() => {
+    const mode = canvasSubject.getMode();
+    if (mode === "select") {
+      setCurrentStrategy(new SelectModeStrategy());
+    } else if (mode === "line" || mode === "rectangle" || mode === "circle") {
+      setCurrentStrategy(new DrawModeStrategy(mode));
+    } else {
+      setCurrentStrategy(null);
+    }
+  }, [canvasSubject.getMode()]);
 
   // Update canvas size to match parent's dimensions
   const updateCanvasSize = useCallback(() => {
@@ -103,110 +118,20 @@ export default function Home() {
   // --- Mouse event handler ---
   const onMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
-    const rect = canvas.getBoundingClientRect();
-    const startX = e.clientX - rect.left;
-    const startY = e.clientY - rect.top;
+    if (!canvas || !currentStrategy) return;
+
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
     const savedImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    let onMouseMove: (e: MouseEvent) => void;
-    let onMouseUp: (e: MouseEvent) => void;
+    const context = { canvas, ctx, savedImageData, idRef };
 
-    const mode = canvasSubject.getMode();
-    if (mode === "line" || mode === "rectangle" || mode === "circle") {
-      const newObj: ObjectInfo = {
-        id: idRef.current++,
-        startPoint: { x: startX, y: startY },
-        currentPoint: { x: startX, y: startY },
-        color: "black",
-        fillColor: "transparent",
-        zIndex: idRef.current,
-        type: mode,
-      };
-
-      onMouseMove = (e: MouseEvent) => {
-        const currentX = e.clientX - rect.left;
-        const currentY = e.clientY - rect.top;
-        ctx.putImageData(savedImageData, 0, 0);
-        ctx.strokeStyle = newObj.color;
-        const drawer = shapeDrawerFactory.getDrawer(newObj.type);
-        newObj.currentPoint = { x: currentX, y: currentY };
-        drawer.draw(ctx, newObj);
-      };
-
-      onMouseUp = (e: MouseEvent) => {
-        const currentX = e.clientX - rect.left;
-        const currentY = e.clientY - rect.top;
-        newObj.currentPoint = { x: currentX, y: currentY };
-        const command = new CreateShapeCommand(
-          canvasSubject.getObjects(),
-          newObj
-        );
-        command.execute();
-        canvas.removeEventListener("mousemove", onMouseMove);
-        canvas.removeEventListener("mouseup", onMouseUp);
-      };
-    } else if (mode === "select") {
-      const clickedPoint = { x: startX, y: startY };
-      const hitObjects = canvasSubject.getObjects().filter((obj) => hitTest(clickedPoint, obj));
-      
-      if (hitObjects.length === 0) {
-        canvasSubject.setSelectedIds([]);
-        return;
-      }
-
-      const topObject = hitObjects.reduce((prev, curr) =>
-        prev.zIndex > curr.zIndex ? prev : curr
-      );
-
-      const intendedSelection = e.shiftKey
-        ? Array.from(new Set([...canvasSubject.getSelectedIds(), topObject.id]))
-        : [topObject.id];
-      
-      canvasSubject.setSelectedIds(intendedSelection);
-
-      const moveStartX = startX;
-      const moveStartY = startY;
-
-      onMouseMove = (e: MouseEvent) => {
-        const currentX = e.clientX - rect.left;
-        const currentY = e.clientY - rect.top;
-        const deltaX = currentX - moveStartX;
-        const deltaY = currentY - moveStartY;
-
-        const command = new MoveShapeCommand(
-          canvasSubject.getObjects(),
-          intendedSelection,
-          deltaX,
-          deltaY
-        );
-        command.execute();
-      };
-
-      onMouseUp = (e: MouseEvent) => {
-        const currentX = e.clientX - rect.left;
-        const currentY = e.clientY - rect.top;
-        const deltaX = currentX - moveStartX;
-        const deltaY = currentY - moveStartY;
-
-        const command = new MoveShapeCommand(
-          canvasSubject.getObjects(),
-          intendedSelection,
-          deltaX,
-          deltaY
-        );
-        command.execute();
-        canvas.removeEventListener("mousemove", onMouseMove);
-        canvas.removeEventListener("mouseup", onMouseUp);
-      };
-    } else {
-      return;
+    const { onMouseMove, onMouseUp } = currentStrategy.onMouseDown(e, context);
+    
+    if (onMouseMove && onMouseUp) {
+      canvas.addEventListener("mousemove", onMouseMove);
+      canvas.addEventListener("mouseup", onMouseUp);
     }
-
-    canvas.addEventListener("mousemove", onMouseMove);
-    canvas.addEventListener("mouseup", onMouseUp);
   };
 
   return (
