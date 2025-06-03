@@ -61,12 +61,17 @@ export class SelectModeStrategy implements CanvasModeStrategy {
         canvas.removeEventListener("mouseup", onMouseUp);
       };
 
+      // Add event listeners
+      const canvas = e.target as HTMLCanvasElement;
+      canvas.addEventListener("mousemove", onMouseMove);
+      canvas.addEventListener("mouseup", onMouseUp);
+
       return { onMouseMove, onMouseUp };
     } else if (!e.shiftKey) {
       // Clear selection if clicking on empty space without shift
       model.setSelectedIds([]);
     }
 
-    return {};
+    return { onMouseMove: undefined, onMouseUp: undefined };
   }
 } 
