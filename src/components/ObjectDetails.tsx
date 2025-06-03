@@ -1,24 +1,26 @@
 import { Box, Input, Stack, Text } from "@chakra-ui/react";
 import { ObjectInfo } from "@/types/objects";
 import { useEffect, useState } from "react";
+import { canvasModel } from "@/models/CanvasModel";
 
-export interface ObjectDetailsProps {
-  object: ObjectInfo;
-  onUpdate: (updated: ObjectInfo) => void;
-}
+export function ObjectDetails() {
+  const [localObject, setLocalObject] = useState<ObjectInfo | null>(null);
 
-export function ObjectDetails({ object, onUpdate }: ObjectDetailsProps) {
-  const [localObject, setLocalObject] = useState<ObjectInfo>(object);
-
-  // Update local state when object prop changes
+  // CanvasModel의 상태 변화를 구독
   useEffect(() => {
-    setLocalObject(object);
-  }, [object]);
+    const unsubscribe = canvasModel.subscribe((state) => {
+      const selected = state.objects.find(obj => obj.id === state.selectedIds[0]);
+      setLocalObject(selected || null);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  if (!localObject) return null;
 
   const handleChange = (field: keyof ObjectInfo, value: unknown) => {
     const updated = { ...localObject, [field]: value };
     setLocalObject(updated);
-    onUpdate(updated);
+    canvasModel.updateObject(updated);
   };
 
   return (

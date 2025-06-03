@@ -2,7 +2,7 @@
 
 import { ObjectDetails } from "@/components/ObjectDetails";
 import { Sidebar } from "@/components/Sidebar";
-import { Mode, ObjectInfo, Shape } from "@/types/objects";
+import { Mode, Shape } from "@/types/objects";
 import { Box, ChakraProvider, defaultSystem, Flex, Text } from "@chakra-ui/react";
 import { useCallback, useEffect, useState } from "react";
 import { DrawModeStrategy } from "@/strategies/DrawModeStrategy";
@@ -40,13 +40,6 @@ export default function Home() {
     canvasModel.deleteObjects(state.objects.map(obj => obj.id));
   }, [state.objects]);
 
-  const updateObject = useCallback((updated: ObjectInfo) => {
-    canvasModel.updateObject(updated);
-  }, []);
-
-  // Get selected object for ObjectDetails
-  const selectedObject = state.objects.find(obj => obj.id === state.selectedIds[0]);
-
   return (
     <ChakraProvider value={defaultSystem}>
       <Flex bgColor="gray.700" flex={1} width="100vw" height="100vh">
@@ -64,23 +57,18 @@ export default function Home() {
             style={{ backgroundColor: "white" }}
           />
         </Box>
-        {selectedObject && (
-          <Box 
-            width="300px" 
-            bg="white" 
-            p={4} 
-            boxShadow="md" 
-            borderRadius="md"
-            position="absolute"
-            right="20px"
-            top="20px"
-          >
-            <ObjectDetails 
-              object={selectedObject} 
-              onUpdate={updateObject} 
-            />
-          </Box>
-        )}
+        <Box 
+          width="300px" 
+          bg="white" 
+          p={4} 
+          boxShadow="md" 
+          borderRadius="md"
+          position="absolute"
+          right="20px"
+          top="20px"
+        >
+          <ObjectDetails />
+        </Box>
       </Flex>
     </ChakraProvider>
   );
