@@ -42,12 +42,6 @@ export class DrawModeStrategy implements CanvasModeStrategy {
       model.updateObject(updatedObject);
     };
 
-    const onMouseUp = () => {
-      const canvas = e.target as HTMLCanvasElement;
-      canvas.removeEventListener("mousemove", onMouseMove);
-      canvas.removeEventListener("mouseup", onMouseUp);
-    };
-
-    return { onMouseMove, onMouseUp };
+    return { onMouseMove };
   }
 } 

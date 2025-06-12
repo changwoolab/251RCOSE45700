@@ -149,11 +149,14 @@ export function useCanvas({ state, currentStrategy }: UseCanvasProps): UseCanvas
       idRef
     };
 
-    const { onMouseMove, onMouseUp } = currentStrategy.onMouseDown(e, context);
+    const { onMouseMove } = currentStrategy.onMouseDown(e, context);
     
-    if (onMouseMove && onMouseUp) {
+    if (onMouseMove) {
       canvasRef.current.addEventListener("mousemove", onMouseMove);
-      canvasRef.current.addEventListener("mouseup", onMouseUp);
+      canvasRef.current.addEventListener("mouseup", () => {
+        canvasRef.current?.removeEventListener("mousemove", onMouseMove);
+        canvasRef.current?.removeEventListener("mouseup", () => {});
+      });
     }
   }, [currentStrategy]);
 

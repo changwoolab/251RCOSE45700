@@ -16,6 +16,5 @@ export interface CanvasContext {
 export interface CanvasModeStrategy {
   onMouseDown: (e: React.MouseEvent<HTMLCanvasElement>, context: CanvasContext) => {
     onMouseMove?: (e: MouseEvent) => void;
-    onMouseUp?: (e: MouseEvent) => void;
   };
 } 
